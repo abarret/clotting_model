@@ -100,9 +100,19 @@ public:
                             SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM> >(NULL)) override;
 
     //\}
+    
+    inline void setPlateletIdx(const int phi_idx)
+    {
+	    d_phi_idx = phi_idx;
+    }
+
+    inline void setZIdx(const int z_idx)
+    {
+	    d_z_idx = z_idx;
+    }
 
 private:
-    double d_lambda;
+    int d_phi_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index;
 };
 
 } // Namespace IBAMR
