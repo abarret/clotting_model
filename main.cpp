@@ -48,6 +48,33 @@ void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
                  const double loop_time,
                  const string& data_dump_dirname);
 
+struct BetaFcn
+{
+public:
+    BetaFcn(const double eps_0, const double beta_0, const double beta_1)
+        : d_eps_0(eps_0), d_beta_0(beta_0), d_beta_1(beta_1)
+    {
+        // intentionally blank
+        return;
+    }
+    double beta(const double eps)
+    {
+        return 0.0;
+    }
+
+private:
+    double d_eps_0 = std::numeric_limits<double>::quiet_NaN();
+    double d_beta_0 = std::numeric_limits<double>::quiet_NaN();
+    double d_beta_1 = std::numeric_limits<double>::quiet_NaN();
+};
+
+double
+beta_wrapper(const double eps, void* ctx)
+{
+    auto beta_fcn = static_cast<BetaFcn*>(ctx);
+    return beta_fcn->beta(eps);
+}
+
 /*******************************************************************************
  * For each run, the input filename and restart information (if needed) must   *
  * be given on the command line.  For non-restarted case, command line is:     *
@@ -187,6 +214,9 @@ main(int argc, char* argv[])
         Pointer<CohesionStressRHS> cohesion_relax =
             new CohesionStressRHS("CohesionRHS", app_initializer->getComponentDatabase("CohesionRHS"));
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
+        // TODO: Set up betaFcn correctly
+        BetaFcn betaFcn(0.0, 0.0, 0.0);
+        cohesionStressForcing->registerBetaFcn(beta_wrapper, static_cast<void*>(betaFcn));
 
         // Set up platelet and activating chemical advection
         Pointer<CellVariable<NDIM, double>> phi_n_var = new CellVariable<NDIM, double>("phi_n");
