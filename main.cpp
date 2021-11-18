@@ -59,9 +59,12 @@ public:
     }
     double beta(const double eps)
     {
-        if (eps > d_eps_0) {
+        if (eps > d_eps_0)
+        {
             return d_beta_0;
-        } else {
+        }
+        else
+        {
             return d_beta_0 * std::exp(d_beta_1 * (eps - d_eps_0));
         }
     }
@@ -221,7 +224,7 @@ main(int argc, char* argv[])
         // TODO: Set up betaFcn correctly
         // eps0 = (3*a2) / a0
         BetaFcn betaFcn(0.0, 0.0, 0.0);
-        cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(betaFcn));
+        cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
 
         // Set up platelet and activating chemical advection
         Pointer<CellVariable<NDIM, double>> phi_n_var = new CellVariable<NDIM, double>("phi_n");
