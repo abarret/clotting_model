@@ -216,7 +216,7 @@ main(int argc, char* argv[])
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
         // TODO: Set up betaFcn correctly
         BetaFcn betaFcn(0.0, 0.0, 0.0);
-        cohesionStressForcing->registerBetaFcn(beta_wrapper, static_cast<void*>(betaFcn));
+        cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(betaFcn));
 
         // Set up platelet and activating chemical advection
         Pointer<CellVariable<NDIM, double>> phi_n_var = new CellVariable<NDIM, double>("phi_n");
