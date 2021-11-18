@@ -27,7 +27,8 @@ namespace IBAMR
 CohesionStressRHS::CohesionStressRHS(const std::string& object_name, Pointer<Database> input_db)
     : CFRelaxationOperator(object_name, input_db)
 {
-    // intentionally blank
+    // Get values from inputdb
+    d_a2 = input_db->getDouble("a2");
     return;
 } // Constructor
 
@@ -46,26 +47,33 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> z_data = patch->getPatchData(d_z_idx);
     ret_data->fillAll(0.0);
     if (initial_time) return;
-    const double l_inv = 1.0 / d_lambda;
+    //const double l_inv = 1.0 / d_lambda; not used in this calculation
     for (CellIterator<NDIM> i(patch_box); i; i++)
     {
         const CellIndex<NDIM>& idx = i();
-        MatrixNd mat;
+	// Compute the ODE terms for stress here
 #if (NDIM == 2)
-        mat(0, 0) = (*in_data)(idx, 0);
-        mat(1, 1) = (*in_data)(idx, 1);
-        mat(0, 1) = mat(1, 0) = (*in_data)(idx, 2);
+    double trace = (*in_data)(idx, 0) + (*in_data)(idx, 1); 
+    (*ret_data)(idx, 0) = d_a2 * (*phi_data)(idx) * (*phi_data)(idx) - d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 0);
+    (*ret_data)(idx, 1) = d_a2 * (*phi_data)(idx) * (*phi_data)(idx) - d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 1);
+    (*ret_data)(idx, 2) = -d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 2);
 #endif
 #if (NDIM == 3)
-        mat(0, 0) = (*in_data)(idx, 0);
-        mat(1, 1) = (*in_data)(idx, 1);
-        mat(2, 2) = (*in_data)(idx, 2);
-        mat(1, 2) = mat(2, 1) = (*in_data)(idx, 3);
-        mat(0, 2) = mat(2, 0) = (*in_data)(idx, 4);
-        mat(0, 1) = mat(1, 0) = (*in_data)(idx, 5);
+    double trace = (*in_data)(idx, 0) + (*in_data)(idx, 1) + (*in_data)(idx, 2);
+    (*ret_data)(idx, 0) = d_a2 * (*phi_data)(idx) * (*phi_data)(idx) - d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 0);
+    (*ret_data)(idx, 1) = d_a2 * (*phi_data)(idx) * (*phi_data)(idx) - d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 1);
+    (*ret_data)(idx, 2) = d_a2 * (*phi_data)(idx) * (*phi_data)(idx) - d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 2);
+    (*ret_data)(idx, 3) = -d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 3);
+    (*ret_data)(idx, 4) = -d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 4);
+    (*ret_data)(idx, 5) = -d_beta_fcn(trace / (*z_data)(idx)) * (*in_data)(idx, 5);
 #endif
-	// Compute the ODE terms for stress here
     }
 } // setDataOnPatch
+
+
+void CohesionStressRHS::registerBetaFcn(std::function<double(double, void*)> wrapper, void *beta) {
+    // We set beta here
+    d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
+}
 
 } // namespace IBAMR

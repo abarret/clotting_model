@@ -59,7 +59,11 @@ public:
     }
     double beta(const double eps)
     {
-        return 0.0;
+        if (eps > d_eps_0) {
+            return d_beta_0;
+        } else {
+            return d_beta_0 * std::exp(d_beta_1 * (eps - d_eps_0));
+        }
     }
 
 private:
@@ -215,6 +219,7 @@ main(int argc, char* argv[])
             new CohesionStressRHS("CohesionRHS", app_initializer->getComponentDatabase("CohesionRHS"));
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
         // TODO: Set up betaFcn correctly
+        // eps0 = (3*a2) / a0
         BetaFcn betaFcn(0.0, 0.0, 0.0);
         cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(betaFcn));
 

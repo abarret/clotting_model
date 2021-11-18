@@ -40,6 +40,7 @@
 #include "tbox/Utilities.h"
 
 #include <string>
+#include <functional>
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
 
@@ -100,6 +101,8 @@ public:
                             SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM> >(NULL)) override;
 
     //\}
+
+    void registerBetaFcn(std::function<double(double, void*)> wrapper, void *beta);
     
     inline void setPlateletIdx(const int phi_idx)
     {
@@ -113,6 +116,9 @@ public:
 
 private:
     int d_phi_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index;
+    double d_a2 = std::numeric_limits<double>::quiet_NaN;
+    // Beta function pointer
+    std::function<double(double)> d_beta_fcn;
 };
 
 } // Namespace IBAMR
