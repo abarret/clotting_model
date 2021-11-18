@@ -39,6 +39,7 @@
 #include "tbox/Pointer.h"
 #include "tbox/Utilities.h"
 
+#include <functional>
 #include <string>
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
@@ -92,27 +93,32 @@ public:
      * \brief Evaluate the function on the patch interior.
      */
     void setDataOnPatch(const int data_idx,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM> > var,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM> > patch,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
                         const double data_time,
                         const bool initial_time = false,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM> > patch_level =
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM> >(NULL)) override;
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> patch_level =
+                            SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>>(NULL)) override;
 
     //\}
-    
+
+    void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
+
     inline void setPlateletIdx(const int phi_idx)
     {
-	    d_phi_idx = phi_idx;
+        d_phi_idx = phi_idx;
     }
 
     inline void setZIdx(const int z_idx)
     {
-	    d_z_idx = z_idx;
+        d_z_idx = z_idx;
     }
 
 private:
     int d_phi_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index;
+    double d_a2 = std::numeric_limits<double>::quiet_NaN();
+    // Beta function pointer
+    std::function<double(double)> d_beta_fcn;
 };
 
 } // Namespace IBAMR
