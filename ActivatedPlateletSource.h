@@ -73,8 +73,26 @@ public:
 
     //\}
 
+    /*!
+     * \brief Evaluate the platlet sources
+     */
+    void setDataOnPatchLevel(const int data_idx,
+                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                            SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> p_level,
+                            const double data_time,
+                            const bool initial_time = false) override;
+
+    /*!
+     * \brief Defines the smooth Heaviside function to be used by this class
+     */
+    std::function<double(double)> *Heaviside; // correct this if neccesary
+
 private:
     ActivatedPlateletSource() = delete;
+    // R(c) constants
+    double d_ct = std::numeric_limits<double>::quiet_NaN(); // concentration threshold for activation
+    double d_r0 = std::numeric_limits<double>::quiet_NaN(); // base rate of platelet activation
+    double d_k = std::numeric_limits<double>::quiet_NaN(); // platelet degredation rate?
 
     ActivatedPlateletSource(const ActivatedPlateletSource& from) = delete;
 

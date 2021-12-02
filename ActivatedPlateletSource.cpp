@@ -17,6 +17,7 @@
 
 #include <HierarchyDataOpsManager.h>
 #include <SAMRAI_config.h>
+#include <math.h>
 
 // Local includes
 #include "ActivatedPlateletSource.h"
@@ -29,6 +30,9 @@ ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> pl_n_va
     : d_pl_n_var(pl_n_var), d_c_var(c_var), d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // intentionally blank
+    d_ct = input_db->getDouble("ct"); // change the get strings to fix whatever the true label is
+    d_r0 = input_db->getDouble("r0");
+    d_k = input_db->getDouble("k");
     return;
 } // ActivatedPlateletSource
 
@@ -127,7 +131,7 @@ ActivatedPlateletSource::setDataOnPatchHierarchy(const int data_idx,
 
 void
 ActivatedPlateletSource::setDataOnPatch(const int data_idx,
-                                        Pointer<Variable<NDIM>> /*var*/,
+                                        Pointer<Variable<NDIM>> /*var*/, // So why do some params have no name?
                                         Pointer<Patch<NDIM>> patch,
                                         const double /*data_time*/,
                                         const bool initial_time,
@@ -145,8 +149,27 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     {
         const CellIndex<NDIM>& idx = ci();
         // Compute source data and fill in F_data
+        // I assume the values to be filled is that of phi_n, and that H is defined at this point
+        double d_c = (*c_data)(idx);
+        double d_pl_n = (*pl_n_data)(idx);
+        // phi_n+1 = phi_n * exp(-k(R(c)+R_w(w))) (at a specific index)
+        // Here, R(c) = R_0 * H(c-c_t), R_0 base reaction & c_t concentration threshold. H is smooth Heaviside function.
+        // we expect d_r0 and d_ct to be set correctly by now.
+        double Rc = d_r0 * Heaviside(d_c - d_ct);
+        // typically R_w(w) will be 0. But how do we get this info when we need it?
+        (*F_data)(idx) = d_pl_n * std::exp(-d_k*Rc);
     }
     return;
 } // setDataOnPatch
 
+
+ActivatedPlateletSource::setDataOnPatchLevel(const int data_idx,
+                            Pointer<Variable<NDIM>> var /* var */,
+                            Pointer<PatchLevel<NDIM>> p_level /* patch level */,
+                            const double data_time,
+                            const bool initial_time = false)
+{
+    // Much ado about patch levels, though I don't fully understand their nuances even now
+    // I will discuss this with Aaron tomorrow.
+} // setDataOnPatchLevel
 //////////////////////////////////////////////////////////////////////////////
