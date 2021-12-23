@@ -100,6 +100,7 @@ namespace ModelData
 {
 static double kappa = 1.0e6;
 static double eta = 0.0;
+static double beta_s = 1.0e3;
 static double dx = -1.0;
 static bool ERROR_ON_MOVE = false;
 void
@@ -123,6 +124,24 @@ tether_force_function(VectorValue<double>& F,
     std::vector<double> d = { std::abs(x(0) - X(0)), std::abs(x(1) - X(1)) };
     if (ERROR_ON_MOVE && ((d[0] > 0.25 * dx) || (d[1] > 0.25 * dx))) TBOX_ERROR("Structure has moved too much.\n");
 }
+
+void
+tether_penalty_stress_fcn(TensorValue<double>& PP,
+                          const TensorValue<double>& FF,
+                          const libMesh::Point& /*X*/,
+                          const libMesh::Point& /*s*/,
+                          Elem* const /*elem*/,
+                          const vector<const vector<double>*>& /*var_data*/,
+                          const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
+                          double /*time*/,
+                          void* ctx)
+{
+    const TensorValue<double> FF_inv_trans = tensor_inverse_transpose(FF, NDIM);
+    double J = FF.det();
+    PP = beta_s * J * log(J) * FF_inv_trans;
+    return;
+}
+
 } // namespace ModelData
 using namespace ModelData;
 
@@ -187,7 +206,7 @@ main(int argc, char* argv[])
         const double mfac = input_db->getDouble("MFAC");
         const double ds = mfac * dx;
         std::string elem_type = input_db->getString("ELEM_TYPE");
-        const double R = 1.0;
+        const double R = input_db->getDouble("RADIUS");
         if (NDIM == 2 && (elem_type == "TRI3" || elem_type == "TRI6"))
         {
 #ifdef LIBMESH_HAVE_TRIANGLE
@@ -295,6 +314,8 @@ main(int argc, char* argv[])
         std::vector<SystemData> sys_data = { SystemData(IBFEMethod::VELOCITY_SYSTEM_NAME, vars) };
         IBFEMethod::LagBodyForceFcnData body_fcn_data(tether_force_function, sys_data);
         ib_method_ops->registerLagBodyForceFunction(body_fcn_data);
+        beta_s = input_db->getDouble("BETA_S");
+        ib_method_ops->registerPK1StressFunction(tether_penalty_stress_fcn);
 
         // Create boundary condition specification objects (when necessary).
         const IntVector<NDIM>& periodic_shift = grid_geometry->getPeriodicShift();
