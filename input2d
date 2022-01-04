@@ -1,6 +1,6 @@
 PI = 3.14159265358979
 // physical parameters
-MU  = 0.5                              // fluid viscosity
+MU  = 0.04                              // fluid viscosity
 RHO = 1.0                                 // fluid density
 LX = 32.0
 LY = 4.0
@@ -27,15 +27,8 @@ RELAXATION_TIME = 0.1
 VISCOSITY = 0.0
 USING_EXACT_U = FALSE
 BDRY_INTERP_TYPE = "LINEAR"
-
-// Structural parameters
-KAPPA = 1.0e5*2.5
-ETA = 0.0
-BETA_S = 1.0e5*2.5
-ERROR_ON_MOVE = FALSE
-MFAC = 1.0
-ELEM_TYPE = "TRI3"
 RADIUS = 1.0
+P_INLET = 12.5
 
 // solver parameters
 NORMALIZE_VELOCITY = FALSE
@@ -48,14 +41,14 @@ CONVECTIVE_TS_TYPE = "ADAMS_BASHFORTH"    // convective time stepping type
 CONVECTIVE_OP_TYPE = "PPM"                // convective differencing discretization type
 CONVECTIVE_FORM    = "ADVECTIVE"          // how to compute the convective terms
 NORMALIZE_PRESSURE = FALSE                 // whether to explicitly force the pressure to have mean zero
-CFL_MAX            = 0.1                  // maximum CFL number
-U_MAX              = 0.5*RE * MU / (RHO * RADIUS)
-DT_MAX = DX * CFL_MAX / U_MAX
+CFL_MAX            = 0.3                  // maximum CFL number
+U_MAX              = RE * MU / (RHO * RADIUS)
+DT_MAX = 0.1*DX * CFL_MAX / U_MAX
 DT_MIN = 0.1 * DT_MAX
-END_TIME = 4.0
-VORTICITY_TAGGING  = FALSE                // whether to tag cells for refinement based on vorticity thresholds
-TAG_BUFFER         = 1                    // sized of tag buffer used by grid generation algorithm
-REGRID_CFL_INTERVAL    = 10000000             // effectively disable regridding
+END_TIME = 50.0
+VORTICITY_TAGGING  = TRUE                // whether to tag cells for refinement based on vorticity thresholds
+TAG_BUFFER         = 3                    // sized of tag buffer used by grid generation algorithm
+REGRID_CFL_INTERVAL    = 0.75
 ERROR_ON_DT_CHANGE = TRUE
 SPLIT_FORCES = FALSE
 USE_JUMP_CONDITIONS = FALSE
@@ -80,6 +73,15 @@ ADV_DIFF_CONVECTIVE_FORM = "ADVECTIVE"
 PROJECTION_METHOD_TYPE = "PRESSURE_UPDATE"
 SECOND_ORDER_PRESSURE_UPDATE = TRUE
 P = "1.0"
+
+// Structural parameters
+KAPPA = 0.5*1703.1250000*10000.0
+ETA = 0.5*22.6562500*100.0
+BETA_S = 0.5*10.0*10000.0
+ERROR_ON_MOVE = TRUE
+MFAC = 1.0
+ELEM_TYPE = "TRI3"
+
 
 phi_n_D = 0.01
 phi_a_D = 0.0
@@ -168,10 +170,7 @@ VelocityInitialConditions {
 }
 
 VelocityBcCoefs_0 {
-   t_half = 0.1
-   tau = 1.0
-   dt = DT_MAX
-   umax = U_MAX
+   p_inlet = P_INLET
 
    acoef_function_0 = "0.0"
    acoef_function_1 = "0.0"
@@ -183,21 +182,20 @@ VelocityBcCoefs_0 {
    bcoef_function_2 = "0.0"
    bcoef_function_3 = "0.0"
 
-//   gcoef_function_0 = "umax * 3.0/2.0*tanh(t/(400.0*dt))*(1.0-X_1*X_1/4.0)"
-   gcoef_function_0 = "-100.0"
+   gcoef_function_0 = "-p_inlet"
    gcoef_function_1 = "0.0"
    gcoef_function_2 = "0.0"
    gcoef_function_3 = "0.0"
 }
 
 VelocityBcCoefs_1 {
-   acoef_function_0 = "0.0"
-   acoef_function_1 = "0.0"
+   acoef_function_0 = "1.0"
+   acoef_function_1 = "1.0"
    acoef_function_2 = "1.0"
    acoef_function_3 = "1.0"
 
-   bcoef_function_0 = "1.0"
-   bcoef_function_1 = "1.0"
+   bcoef_function_0 = "0.0"
+   bcoef_function_1 = "0.0"
    bcoef_function_2 = "0.0"
    bcoef_function_3 = "0.0"
 
@@ -228,7 +226,8 @@ INSStaggeredHierarchyIntegrator {
    cfl                           = CFL_MAX
    dt_max                        = DT_MAX
    using_vorticity_tagging       = VORTICITY_TAGGING
-   vorticity_rel_thresh          = 0.25,0.125
+//   vorticity_rel_thresh          = 0.25,0.125
+   vorticity_abs_thresh          = 5.0, 10.0
    tag_buffer                    = TAG_BUFFER
    regrid_cfl_interval               = REGRID_CFL_INTERVAL
    output_U                      = OUTPUT_U
@@ -321,7 +320,7 @@ Main {
 
 // visualization dump parameters
    viz_writer                  = "VisIt"
-   viz_dump_interval           = 40
+   viz_dump_interval           = 100
    viz_dump_dirname            = "visit"
    visit_number_procs_per_file = 1
 
