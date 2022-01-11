@@ -37,6 +37,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <math.h>
 
 // Local Headers
 #include "CohesionStressRHS.h"

@@ -30,9 +30,16 @@ ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> pl_n_va
     : d_pl_n_var(pl_n_var), d_c_var(c_var), d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // intentionally blank
-    d_ct = input_db->getDouble("ct"); // change the get strings to fix whatever the true label is
-    d_r0 = input_db->getDouble("r0");
-    d_k = input_db->getDouble("k");
+    // These need to be changed to the relevant parameters
+    // K Constants
+    d_Kab = input_db->getDouble("Kab"); // change the get strings to fix whatever the true label is
+    d_Kbb = input_db->getDouble("Kbb");
+    d_Kaw = input_db->getDouble("Kaw");
+    // n constants
+    d_n_b_mx = input_db->getDouble("nbmax")
+    d_n_w_mx = input_db->getDouble("nwmax")
+    // w constant
+    d_w_mx = input_db->getDouble("wmax")
     return;
 } // ActivatedPlateletSource
 
@@ -131,14 +138,14 @@ ActivatedPlateletSource::setDataOnPatchHierarchy(const int data_idx,
 
 void
 ActivatedPlateletSource::setDataOnPatch(const int data_idx,
-                                        Pointer<Variable<NDIM>> /*var*/, // So why do some params have no name?
+                                        Pointer<Variable<NDIM>> /*var*/,
                                         Pointer<Patch<NDIM>> patch,
                                         const double /*data_time*/,
                                         const bool initial_time,
                                         Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     Pointer<CellData<NDIM, double>> F_data = patch->getPatchData(data_idx);
-    F_data->fillAll(0.0);
+    F_data->fillAll(0.0); // rename to alpha?
     if (initial_time) return;
     Pointer<CellData<NDIM, double>> pl_n_data =
         patch->getPatchData(d_pl_n_var, d_adv_diff_hier_integrator->getScratchContext());
@@ -147,17 +154,21 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     const Box<NDIM>& patch_box = patch->getBox();
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
+        // compute R2 R3 and R4 -> alpha
+        // the four patch variables we now have are phi_a, phi_b, z_b, and w.
+        const double d_eta_b = 1.0; // placeholder since idk how to compute it
         const CellIndex<NDIM>& idx = ci();
-        // Compute source data and fill in F_data
-        // I assume the values to be filled is that of phi_n, and that H is defined at this point
-        double d_c = (*c_data)(idx);
-        double d_pl_n = (*pl_n_data)(idx);
-        // phi_n+1 = phi_n * exp(-k(R(c)+R_w(w))) (at a specific index)
-        // Here, R(c) = R_0 * H(c-c_t), R_0 base reaction & c_t concentration threshold. H is smooth Heaviside function.
-        // we expect d_r0 and d_ct to be set correctly by now.
-        double Rc = d_r0 * Heaviside(d_c - d_ct);
-        // typically R_w(w) will be 0. But how do we get this info when we need it?
-        (*F_data)(idx) = d_pl_n * std::exp(-d_k*Rc);
+        // Compute source data (relaxation term)
+        double d_phi_a = (*phi_a_data)(idx);
+        double d_phi_b = (*phi_b_data)(idx);
+        double d_w = (*w_data)(idx);
+        double d_z = (*z_data)(idx);
+        // Compute the source terms
+        const double d_R2 = d_Kab * d_n_b_mx * d_phi_a * d_eta_b;
+        const double d_R3 = d_Kbb * (d_n_b_mx * d_phi_b - 2.0 * d_z) * (d_n_b_mx * d_phi_b - 2.0 * d_z);
+        const double d_R4 = d_Kaw * d_n_w_mx * (d_w_mx - d_w) * d_n_b_mx * d_phi_a;
+        const double d_alpha = d_R2 + d_R3 + d_R4;
+        // what do I do now?
     }
     return;
 } // setDataOnPatch
