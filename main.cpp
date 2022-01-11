@@ -16,6 +16,8 @@
 
 #include <ibamr/AdvDiffSemiImplicitHierarchyIntegrator.h>
 #include <ibamr/CFINSForcing.h>
+#include <ibamr/IBExplicitHierarchyIntegrator.h>
+#include <ibamr/IBFEMethod.h>
 #include <ibamr/INSCollocatedHierarchyIntegrator.h>
 #include <ibamr/INSStaggeredHierarchyIntegrator.h>
 #include <ibamr/app_namespaces.h>
@@ -26,6 +28,18 @@
 #include <ibtk/IBTK_MPI.h>
 #include <ibtk/muParserCartGridFunction.h>
 #include <ibtk/muParserRobinBcCoefs.h>
+
+#include "libmesh/mesh_modification.h"
+#include "libmesh/mesh_refinement.h"
+#include "libmesh/mesh_tools.h"
+#include <libmesh/boundary_info.h>
+#include <libmesh/boundary_mesh.h>
+#include <libmesh/elem.h>
+#include <libmesh/equation_systems.h>
+#include <libmesh/exodusII_io.h>
+#include <libmesh/mesh.h>
+#include <libmesh/mesh_generation.h>
+#include <libmesh/mesh_triangle_interface.h>
 
 #include <petscsys.h>
 
@@ -82,6 +96,55 @@ beta_wrapper(const double eps, void* ctx)
     return beta_fcn->beta(eps);
 }
 
+namespace ModelData
+{
+static double kappa = 1.0e6;
+static double eta = 0.0;
+static double beta_s = 1.0e3;
+static double dx = -1.0;
+static bool ERROR_ON_MOVE = false;
+void
+tether_force_function(VectorValue<double>& F,
+                      const TensorValue<double>& /*FF*/,
+                      const libMesh::Point& x,
+                      const libMesh::Point& X,
+                      Elem* const /*elem*/,
+                      const vector<const vector<double>*>& var_data,
+                      const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
+                      double /*time*/,
+                      void* /*ctx*/)
+{
+    // Tether to initial location using damped springs
+    // x is current location
+    // X is reference location
+    // U is velocity
+    const std::vector<double>& U = *var_data[0];
+    for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (X(d) - x(d)) - eta * U[d];
+    // Check to see how much structure has moved. If more than a quarter of a grid cell, quit.
+    std::vector<double> d = { std::abs(x(0) - X(0)), std::abs(x(1) - X(1)) };
+    if (ERROR_ON_MOVE && ((d[0] > 0.25 * dx) || (d[1] > 0.25 * dx))) TBOX_ERROR("Structure has moved too much.\n");
+}
+
+void
+tether_penalty_stress_fcn(TensorValue<double>& PP,
+                          const TensorValue<double>& FF,
+                          const libMesh::Point& /*X*/,
+                          const libMesh::Point& /*s*/,
+                          Elem* const /*elem*/,
+                          const vector<const vector<double>*>& /*var_data*/,
+                          const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
+                          double /*time*/,
+                          void* ctx)
+{
+    const TensorValue<double> FF_inv_trans = tensor_inverse_transpose(FF, NDIM);
+    double J = FF.det();
+    PP = beta_s * J * log(J) * FF_inv_trans;
+    return;
+}
+
+} // namespace ModelData
+using namespace ModelData;
+
 /*******************************************************************************
  * For each run, the input filename and restart information (if needed) must   *
  * be given on the command line.  For non-restarted case, command line is:     *
@@ -98,6 +161,7 @@ main(int argc, char* argv[])
 {
     // Initialize IBAMR and libraries. Deinitialization is handled by this object as well.
     IBTKInit ibtk_init(argc, argv, MPI_COMM_WORLD);
+    const LibMeshInit& init = ibtk_init.getLibMeshInit();
 
     { // cleanup dynamically allocated objects prior to shutdown
 
@@ -111,6 +175,17 @@ main(int argc, char* argv[])
         const bool dump_viz_data = app_initializer->dumpVizData();
         const int viz_dump_interval = app_initializer->getVizDumpInterval();
         const bool uses_visit = dump_viz_data && app_initializer->getVisItDataWriter();
+#ifdef LIBMESH_HAVE_EXODUS_API
+        const bool uses_exodus = dump_viz_data && !app_initializer->getExodusIIFilename().empty();
+#else
+        const bool uses_exodus = false;
+        if (!app_initializer->getExodusIIFilename().empty())
+        {
+            plog << "WARNING: libMesh was compiled without Exodus support, so no "
+                 << "Exodus output will be written in this program.\n";
+        }
+#endif
+        const std::string exodus_filename = app_initializer->getExodusIIFilename();
 
         const bool dump_restart_data = app_initializer->dumpRestartData();
         const int restart_dump_interval = app_initializer->getRestartDumpInterval();
@@ -123,33 +198,90 @@ main(int argc, char* argv[])
         const bool dump_timer_data = app_initializer->dumpTimerData();
         const int timer_dump_interval = app_initializer->getTimerDumpInterval();
 
-        // Create major algorithm and data objects that comprise the
-        // application.  These objects are configured from the input database
-        // and, if this is a restarted run, from the restart database.
-        Pointer<INSHierarchyIntegrator> time_integrator;
-        const string solver_type =
-            app_initializer->getComponentDatabase("Main")->getStringWithDefault("solver_type", "STAGGERED");
-        if (solver_type == "STAGGERED")
+        // Create finite element mesh
+        Mesh solid_mesh(init.comm(), NDIM);
+        dx = input_db->getDouble("DX");
+        ERROR_ON_MOVE = input_db->getBool("ERROR_ON_MOVE");
+        // mfac is the mesh factor, how many Lagrangian nodes per Eulerian grid cell?
+        const double mfac = input_db->getDouble("MFAC");
+        const double ds = mfac * dx;
+        std::string elem_type = input_db->getString("ELEM_TYPE");
+        const double R = input_db->getDouble("RADIUS");
+        if (NDIM == 2 && (elem_type == "TRI3" || elem_type == "TRI6"))
         {
-            time_integrator = new INSStaggeredHierarchyIntegrator(
-                "INSStaggeredHierarchyIntegrator",
-                app_initializer->getComponentDatabase("INSStaggeredHierarchyIntegrator"));
-        }
-        else if (solver_type == "COLLOCATED")
-        {
-            time_integrator = new INSCollocatedHierarchyIntegrator(
-                "INSCollocatedHierarchyIntegrator",
-                app_initializer->getComponentDatabase("INSCollocatedHierarchyIntegrator"));
+#ifdef LIBMESH_HAVE_TRIANGLE
+            const int num_circum_nodes = ceil(2.0 * M_PI * R / ds);
+            for (int k = 0; k < num_circum_nodes; ++k)
+            {
+                const double theta = 2.0 * M_PI * static_cast<double>(k) / static_cast<double>(num_circum_nodes);
+                solid_mesh.add_point(libMesh::Point(R * cos(theta), R * sin(theta)));
+            }
+            TriangleInterface triangle(solid_mesh);
+            triangle.triangulation_type() = TriangleInterface::GENERATE_CONVEX_HULL;
+            triangle.elem_type() = Utility::string_to_enum<ElemType>(elem_type);
+            triangle.desired_area() = 1.5 * sqrt(3.0) / 4.0 * ds * ds;
+            triangle.insert_extra_points() = true;
+            triangle.smooth_after_generating() = true;
+            triangle.triangulate();
+#else
+            TBOX_ERROR("ERROR: libMesh appears to have been configured without support for Triangle,\n"
+                       << "       but Triangle is required for TRI3 or TRI6 elements.\n");
+#endif
         }
         else
         {
-            TBOX_ERROR("Unsupported solver type: " << solver_type << "\n"
-                                                   << "Valid options are: COLLOCATED, STAGGERED");
+            // NOTE: number of segments along boundary is 4*2^r.
+            const double num_circum_segments = 2.0 * M_PI * R / ds;
+            const int r = log2(0.25 * num_circum_segments);
+            MeshTools::Generation::build_sphere(solid_mesh, R, r, Utility::string_to_enum<ElemType>(elem_type));
         }
+
+        // Ensure nodes on the surface are on the analytic boundary.
+        MeshBase::element_iterator el_end = solid_mesh.elements_begin();
+        for (auto el = solid_mesh.elements_begin(); el != el_end; ++el)
+        {
+            Elem* const elem = *el;
+            for (unsigned int side = 0; side < elem->n_sides(); ++side)
+            {
+                const bool at_mesh_bdry = !elem->neighbor_ptr(side);
+                if (!at_mesh_bdry) continue;
+                for (unsigned int k = 0; k < elem->n_nodes(); ++k)
+                {
+                    if (!elem->is_node_on_side(k, side)) continue;
+                    Node& n = *elem->node_ptr(k);
+                    n = R * n.unit();
+                }
+            }
+        }
+        solid_mesh.prepare_for_use();
+        solid_mesh.print_info();
+
+        Mesh& mesh = solid_mesh;
+
+        // Get structure parameters
+        kappa = input_db->getDouble("KAPPA");
+        eta = input_db->getDouble("ETA");
+
+        // Create major algorithm and data objects that comprise the
+        // application.  These objects are configured from the input database
+        // and, if this is a restarted run, from the restart database.
+        Pointer<INSHierarchyIntegrator> ins_integrator = new INSStaggeredHierarchyIntegrator(
+            "INSStaggeredHierarchyIntegrator",
+            app_initializer->getComponentDatabase("INSStaggeredHierarchyIntegrator"));
         Pointer<AdvDiffSemiImplicitHierarchyIntegrator> adv_diff_integrator;
         adv_diff_integrator = new AdvDiffSemiImplicitHierarchyIntegrator(
             "AdvDiffSemiImplicitHierarchyIntegrator",
             app_initializer->getComponentDatabase("AdvDiffSemiImplicitHierarchyIntegrator"));
+        Pointer<IBFEMethod> ib_method_ops =
+            new IBFEMethod("IBFEMethod",
+                           app_initializer->getComponentDatabase("IBFEMethod"),
+                           &mesh,
+                           app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"));
+        Pointer<IBHierarchyIntegrator> time_integrator =
+            new IBExplicitHierarchyIntegrator("IBHierarchyIntegrator",
+                                              app_initializer->getComponentDatabase("IBHierarchyIntegrator"),
+                                              ib_method_ops,
+                                              ins_integrator);
         Pointer<CartesianGridGeometry<NDIM>> grid_geometry = new CartesianGridGeometry<NDIM>(
             "CartesianGeometry", app_initializer->getComponentDatabase("CartesianGeometry"));
         Pointer<PatchHierarchy<NDIM>> patch_hierarchy = new PatchHierarchy<NDIM>("PatchHierarchy", grid_geometry);
@@ -166,14 +298,24 @@ main(int argc, char* argv[])
                                         error_detector,
                                         box_generator,
                                         load_balancer);
-        time_integrator->registerAdvDiffHierarchyIntegrator(adv_diff_integrator);
+        ins_integrator->registerAdvDiffHierarchyIntegrator(adv_diff_integrator);
         // Create initial condition specification objects.
         Pointer<CartGridFunction> u_init = new muParserCartGridFunction(
             "u_init", app_initializer->getComponentDatabase("VelocityInitialConditions"), grid_geometry);
-        time_integrator->registerVelocityInitialConditions(u_init);
+        ins_integrator->registerVelocityInitialConditions(u_init);
         Pointer<CartGridFunction> p_init = new muParserCartGridFunction(
             "p_init", app_initializer->getComponentDatabase("PressureInitialConditions"), grid_geometry);
-        time_integrator->registerPressureInitialConditions(p_init);
+        ins_integrator->registerPressureInitialConditions(p_init);
+
+        // Configure the IBFE solver
+        ib_method_ops->initializeFEEquationSystems();
+        std::vector<int> vars(NDIM);
+        for (unsigned int d = 0; d < NDIM; ++d) vars[d] = d;
+        std::vector<SystemData> sys_data = { SystemData(IBFEMethod::VELOCITY_SYSTEM_NAME, vars) };
+        IBFEMethod::LagBodyForceFcnData body_fcn_data(tether_force_function, sys_data);
+        ib_method_ops->registerLagBodyForceFunction(body_fcn_data);
+        beta_s = input_db->getDouble("BETA_S");
+        ib_method_ops->registerPK1StressFunction(tether_penalty_stress_fcn);
 
         // Create boundary condition specification objects (when necessary).
         const IntVector<NDIM>& periodic_shift = grid_geometry->getPeriodicShift();
@@ -200,7 +342,7 @@ main(int argc, char* argv[])
                 u_bc_coefs[d] = new muParserRobinBcCoefs(
                     bc_coefs_name, app_initializer->getComponentDatabase(bc_coefs_db_name), grid_geometry);
             }
-            time_integrator->registerPhysicalBoundaryConditions(u_bc_coefs);
+            ins_integrator->registerPhysicalBoundaryConditions(u_bc_coefs);
         }
 
         // Set up visualization plot file writers.
@@ -213,11 +355,11 @@ main(int argc, char* argv[])
         Pointer<CFINSForcing> cohesionStressForcing =
             new CFINSForcing("CohesionStressForcing",
                              app_initializer->getComponentDatabase("CohesionStress"),
-                             time_integrator,
+                             ins_integrator,
                              grid_geometry,
                              adv_diff_integrator,
                              visit_data_writer);
-        time_integrator->registerBodyForceFunction(cohesionStressForcing);
+        ins_integrator->registerBodyForceFunction(cohesionStressForcing);
         Pointer<CohesionStressRHS> cohesion_relax =
             new CohesionStressRHS("CohesionRHS", app_initializer->getComponentDatabase("CohesionRHS"));
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
@@ -241,7 +383,7 @@ main(int argc, char* argv[])
             const Pointer<CellVariable<NDIM, double>>& adv_var = adv_vars[i];
             adv_diff_integrator->registerTransportedQuantity(adv_var);
             // Note fluid advection variable is already registered from CFINSForcing
-            adv_diff_integrator->setAdvectionVelocity(adv_var, time_integrator->getAdvectionVelocityVariable());
+            adv_diff_integrator->setAdvectionVelocity(adv_var, ins_integrator->getAdvectionVelocityVariable());
             adv_diff_integrator->setDiffusionCoefficient(adv_var, input_db->getDouble(adv_var->getName() + "_D"));
             // Need to register source term
             adv_diff_integrator->registerSourceTerm(src_vars[i]);
@@ -249,8 +391,23 @@ main(int argc, char* argv[])
             adv_diff_integrator->setSourceTerm(adv_var, src_vars[i]);
         }
 
+        EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
+        std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
+
         // Initialize hierarchy configuration and data on all patches.
+        ib_method_ops->initializeFEData();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
+
+        // TODO: set up cohesian relaxation function correctly
+        {
+            auto var_db = VariableDatabase<NDIM>::getDatabase();
+            const int phi_a_idx =
+                var_db->mapVariableAndContextToIndex(phi_a_var, adv_diff_integrator->getCurrentContext());
+            // NOTE: This should be z_var, not c_var. But we haven't set up z_var yet.
+            const int z_idx = var_db->mapVariableAndContextToIndex(c_var, adv_diff_integrator->getCurrentContext());
+            cohesion_relax->setPlateletIdx(phi_a_idx);
+            cohesion_relax->setZIdx(z_idx);
+        }
 
         // Deallocate initialization objects.
         app_initializer.setNull();
@@ -262,11 +419,18 @@ main(int argc, char* argv[])
         // Write out initial visualization data.
         int iteration_num = time_integrator->getIntegratorStep();
         double loop_time = time_integrator->getIntegratorTime();
-        if (dump_viz_data && uses_visit)
+        if (dump_viz_data)
         {
             pout << "\n\nWriting visualization files...\n\n";
-            time_integrator->setupPlotData();
-            visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+            if (uses_visit)
+            {
+                time_integrator->setupPlotData();
+                visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+            }
+            if (uses_exodus)
+            {
+                exodus_io->write_timestep(exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+            }
         }
 
         // Main time step loop.
@@ -297,11 +461,19 @@ main(int argc, char* argv[])
             // processing.
             iteration_num += 1;
             const bool last_step = !time_integrator->stepsRemaining();
-            if (dump_viz_data && uses_visit && (iteration_num % viz_dump_interval == 0 || last_step))
+            if (dump_viz_data && (iteration_num % viz_dump_interval == 0 || last_step))
             {
                 pout << "\nWriting visualization files...\n\n";
-                time_integrator->setupPlotData();
-                visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+                if (uses_visit)
+                {
+                    time_integrator->setupPlotData();
+                    visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+                }
+                if (uses_exodus)
+                {
+                    exodus_io->write_timestep(
+                        exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                }
             }
             if (dump_restart_data && (iteration_num % restart_dump_interval == 0 || last_step))
             {
