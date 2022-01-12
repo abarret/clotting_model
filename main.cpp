@@ -53,6 +53,7 @@
 #include <iostream>
 
 // Local Headers
+#include "BoundaryMeshMapping.h"
 #include "CohesionStressRHS.h"
 
 // Function prototypes
@@ -144,7 +145,6 @@ tether_penalty_stress_fcn(TensorValue<double>& PP,
 
 } // namespace ModelData
 using namespace ModelData;
-
 /*******************************************************************************
  * For each run, the input filename and restart information (if needed) must   *
  * be given on the command line.  For non-restarted case, command line is:     *
@@ -185,7 +185,8 @@ main(int argc, char* argv[])
                  << "Exodus output will be written in this program.\n";
         }
 #endif
-        const std::string exodus_filename = app_initializer->getExodusIIFilename();
+        const std::string vol_ex_filename = app_initializer->getExodusIIFilename("vol");
+        const std::string bdry_ex_filename = app_initializer->getExodusIIFilename("bdry");
 
         const bool dump_restart_data = app_initializer->dumpRestartData();
         const int restart_dump_interval = app_initializer->getRestartDumpInterval();
@@ -391,12 +392,20 @@ main(int argc, char* argv[])
             adv_diff_integrator->setSourceTerm(adv_var, src_vars[i]);
         }
 
-        EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
-        std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
-
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
+
+        EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
+        BoundaryMeshMapping bdry_mesh_mapping("BoundaryMeshMapping",
+                                              app_initializer->getComponentDatabase("BoundaryMeshMapping"),
+                                              &mesh,
+                                              ib_method_ops->getFEDataManager());
+        bdry_mesh_mapping.initializeEquationSystems();
+        EquationSystems* bdry_eq_sys = bdry_mesh_mapping.getFEDataManager()->getEquationSystems();
+        MeshBase& bdry_mesh = bdry_eq_sys->get_mesh();
+        std::unique_ptr<ExodusII_IO> vol_exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
+        std::unique_ptr<ExodusII_IO> bdry_exodus_io(uses_exodus ? new ExodusII_IO(bdry_mesh) : nullptr);
 
         // TODO: set up cohesian relaxation function correctly
         {
@@ -429,7 +438,10 @@ main(int argc, char* argv[])
             }
             if (uses_exodus)
             {
-                exodus_io->write_timestep(exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                vol_exodus_io->write_timestep(
+                    vol_ex_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                bdry_exodus_io->write_timestep(
+                    bdry_ex_filename, *bdry_eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
             }
         }
 
@@ -471,8 +483,10 @@ main(int argc, char* argv[])
                 }
                 if (uses_exodus)
                 {
-                    exodus_io->write_timestep(
-                        exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                    vol_exodus_io->write_timestep(
+                        vol_ex_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                    bdry_exodus_io->write_timestep(
+                        bdry_ex_filename, *bdry_eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
                 }
             }
             if (dump_restart_data && (iteration_num % restart_dump_interval == 0 || last_step))

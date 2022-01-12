@@ -13,7 +13,7 @@ include $(IBAMR_BUILD_DIR)/config/make.inc
 ## main driver is in main.cpp
 ##
 ## PDIM = 2 implies two spatial dimensions
-OBJS = CohesionRHS.o
+OBJS = BoundaryMeshMapping.o CohesionRHS.o
 #main.o
 PDIM = 2
 

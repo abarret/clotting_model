@@ -87,6 +87,10 @@ phi_n_D = 0.01
 phi_a_D = 0.0
 c_D = 0.01
 
+BoundaryMeshMapping {
+
+}
+
 CohesionRHS {
  a2 = 1.0
 }

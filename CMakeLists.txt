@@ -4,6 +4,7 @@ PROJECT(AV_2D LANGUAGES C CXX Fortran)
 FIND_PACKAGE(IBAMR REQUIRED)
 
 SET(CXX_SRC
+    BoundaryMeshMapping.cpp
     CohesionStressRHS.cpp
     )
 ADD_EXECUTABLE(main2d main.cpp)
