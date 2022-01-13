@@ -29,11 +29,9 @@ ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> pl_n_va
                                                  Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
     : d_pl_n_var(pl_n_var), d_c_var(c_var), d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
-    // intentionally blank
     // These need to be changed to the relevant parameters
     // K Constants
     d_Kab = input_db->getDouble("Kab"); // change the get strings to fix whatever the true label is
-    d_Kbb = input_db->getDouble("Kbb");
     d_Kaw = input_db->getDouble("Kaw");
     // n constants
     d_n_b_mx = input_db->getDouble("nbmax")
@@ -160,15 +158,11 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
         const CellIndex<NDIM>& idx = ci();
         // Compute source data (relaxation term)
         double d_phi_a = (*phi_a_data)(idx);
-        double d_phi_b = (*phi_b_data)(idx);
         double d_w = (*w_data)(idx);
-        double d_z = (*z_data)(idx);
         // Compute the source terms
         const double d_R2 = d_Kab * d_n_b_mx * d_phi_a * d_eta_b;
-        const double d_R3 = d_Kbb * (d_n_b_mx * d_phi_b - 2.0 * d_z) * (d_n_b_mx * d_phi_b - 2.0 * d_z);
         const double d_R4 = d_Kaw * d_n_w_mx * (d_w_mx - d_w) * d_n_b_mx * d_phi_a;
-        const double d_alpha = d_R2 + d_R3 + d_R4;
-        // what do I do now?
+        (*F_data)(idx) = d_R2 + d_R4;
     }
     return;
 } // setDataOnPatch
