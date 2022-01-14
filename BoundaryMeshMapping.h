@@ -91,19 +91,42 @@ public:
      * Update the location of the boundary mesh. An optional argument is provided if the location of the structure is
      * needed at the end of the timestep. By default, this function loops over parts and calls the part specific
      * function.
+     *
+     * \note This assumes the correct velocity field has been set up via the findVelocity function.
      */
-    virtual void updateBoundaryLocation(double time, bool end_of_timestep = false);
+    virtual void
+    updateBoundaryLocation(double t_start, double t_end, bool end_of_timestep = false, bool initial_time = false);
     /*!
      * Update the location of the boundary mesh for a specific part. An optional argument is provided if the location of
      * the structure is needed at the end of the timestep. By default this function does nothing.
+     *
+     * \note This assumes the correct velocity field has been set up via the findVelocity function.
      */
-    virtual void updateBoundaryLocation(double time, unsigned int part, bool end_of_timestep = false);
+    virtual void updateBoundaryLocation(double t_start, double t_end, unsigned int part, bool end_of_timestep = false);
 
     /*!
      * \brief Initialize the equations systems. Note all systems should be registered with the Equation systems prior to
      * this call. This function also initialized the location of the boundary mesh.
      */
     virtual void initializeEquationSystems();
+
+    /*!
+     * \brief Set the initial conditions of the structure. The position is set to the initial position of the mesh.
+     */
+    virtual void setInitialConditions();
+
+    /*!
+     * \brief Find the velocity of the wall points.
+     */
+    virtual void findVelocity(double time, int xi_idx, int sigma_idx);
+
+    /*!
+     * \brief Find the force exerted on the fluid by the wall. The value of Xi has been set through the findVelocity
+     * function.
+     *
+     * \note This assumes the correct velocity field has been set up via the findVelocity function.
+     */
+    virtual void findForce(double time, int f_idx);
 
     /*!
      * \brief Write data to a restart file.
@@ -126,9 +149,14 @@ protected:
     std::string d_velocity_sys_name = "VELOCITY_SYSTEM";
     std::string d_xi_sys_name = "XI_SYSTEM";
     std::string d_sigma_sys_name = "SIGMA_SYSTEM";
+    std::string d_force_sys_name = "FORCING_SYSTEM";
 
     // Restart data
     std::string d_libmesh_restart_file_extension = "xdr";
+
+    // Force balance data
+    double d_Sw = std::numeric_limits<double>::quiet_NaN();
+    double d_abs_thresh = 1.0e-8;
 
 private:
     void commonConstructor(SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
