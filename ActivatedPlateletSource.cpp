@@ -154,13 +154,12 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         // compute R2 R4
-        // the four patch variables we now have are phi_a, phi_b, z_b, and w.
+        // the four patch variables we now have are phi_a, z_b, and w.
         const double d_eta_b = 1.0; // placeholder since idk how to compute it
         const CellIndex<NDIM>& idx = ci();
         // Compute source data (relaxation term)
         // WHERE DO I GET THESE VARIABLES ** 
         double d_phi_a = (*phi_a_data)(idx);
-        double d_phi_b = (*phi_b_data)(idx);
         double d_w = (*w_data)(idx);
         double d_z = (*z_data)(idx);
         // Compute the source terms
