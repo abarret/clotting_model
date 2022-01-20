@@ -30,7 +30,6 @@ CohesionStressRHS::CohesionStressRHS(const std::string& object_name, Pointer<Dat
     : CFRelaxationOperator(object_name, input_db)
 {
     // Get values from inputdb
-    const double d_a2 = input_db->getDouble("a2"); // TODO DELETE THIS
     const double d_s0 = input_db->getDouble("s0");
     const double d_c4 = input_db->getDouble("c4");
     // K Constants
