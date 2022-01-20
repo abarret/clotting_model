@@ -116,7 +116,7 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
             for (unsigned int d = 0; d < NDIM; ++d) dX_sys.add_variable("dX_" + std::to_string(d), FEType());
             auto& U_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_velocity_sys_name);
             for (unsigned int d = 0; d < NDIM; ++d) U_sys.add_variable("U_" + std::to_string(d), FEType());
-            auto& Xi_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_xi_sys_name);
+            d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_xi_sys_name);
             auto& Sigma_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_sigma_sys_name);
             for (unsigned int d = 0; d < NDIM; ++d) Sigma_sys.add_variable("Sigma_" + std::to_string(d), FEType());
             auto& force_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_force_sys_name);
@@ -161,11 +161,12 @@ void
 BoundaryMeshMapping::updateBoundaryLocation(const double t_start,
                                             const double t_end,
                                             const unsigned int part,
-                                            const bool end_of_timestep)
+                                            const bool end_of_timestep,
+                                            const bool initial_time)
 {
     const double dt = t_end - t_start;
     // Boundary moves according to what's in the velocity systems
-    EquationSystems* eq_sys = d_bdry_eq_sys_vec[part];
+    EquationSystems* eq_sys = d_bdry_eq_sys_vec[part].get();
 
     auto& X_sys = eq_sys->get_system(d_coords_sys_name);
     const DofMap& X_dof_map = X_sys.get_dof_map();
@@ -187,15 +188,18 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start,
         X_dof_map.dof_indices(node, X_dofs);
         dX_dof_map.dof_indices(node, dX_dofs);
         U_dof_map.dof_indices(node, U_dofs);
-        if (initial_time)
-        {
-            X_vec->set(X_dofs[d], (*node)(d));
-        }
         // Use forward Euler
         for (int d = 0; d < NDIM; ++d)
         {
-            X_vec->set(X_dofs[d], (*X_vec)(X_dofs[d]) + dt * (*U_vec)(U_dofs[d]));
-            dX_vec->set(dX_dofs[d], (*node)(d) - (*X_vec)(X_dofs[d]));
+            if (initial_time)
+            {
+                X_vec->set(X_dofs[d], (*node)(d));
+            }
+            else
+            {
+                X_vec->set(X_dofs[d], (*X_vec)(X_dofs[d]) + dt * (*U_vec)(U_dofs[d]));
+                dX_vec->set(dX_dofs[d], (*node)(d) - (*X_vec)(X_dofs[d]));
+            }
         }
     }
     X_vec->close();
@@ -210,7 +214,7 @@ BoundaryMeshMapping::setInitialConditions()
     for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
     {
         // Boundary moves according to what's in the velocity systems
-        EquationSystems* eq_sys = d_bdry_eq_sys_vec[part];
+        EquationSystems* eq_sys = d_bdry_eq_sys_vec[part].get();
 
         auto& X_sys = eq_sys->get_system(d_coords_sys_name);
         const DofMap& X_dof_map = X_sys.get_dof_map();
@@ -260,28 +264,28 @@ BoundaryMeshMapping::findVelocity(const double time, const int xi_idx, const int
     for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
     {
         const std::unique_ptr<BoundaryMesh>& bdry_mesh = d_bdry_meshes[part];
-        EquationSystems* eq_sys = d_bdry_eq_sys_vec[part];
+        EquationSystems* eq_sys = d_bdry_eq_sys_vec[part].get();
         // First we need to interpolate xi and sigma to the structure. Use the FEDataManager for this
-        ExplicitSystem& Xw_sys = eq_sys->get_system(d_coords_sys_name);
+        auto& Xw_sys = eq_sys->get_system<ExplicitSystem>(d_coords_sys_name);
         const DofMap& Xw_dof_map = Xw_sys.get_dof_map();
         NumericVector<double>* Xw_vec = Xw_sys.solution.get();
-        ExplicitSystem& xi_sys = eq_sys->get_system(d_xi_sys_name);
+        auto& xi_sys = eq_sys->get_system<ExplicitSystem>(d_xi_sys_name);
         const DofMap& xi_dof_map = xi_sys.get_dof_map();
         NumericVector<double>* xi_vec = xi_sys.solution.get();
         d_bdry_data_managers[part]->interp(xi_idx, *xi_vec, *Xw_vec, d_xi_sys_name);
-        ExplicitSystem& sigma_sys = eq_sys->get_system(d_sigma_sys_name);
+        auto& sigma_sys = eq_sys->get_system<ExplicitSystem>(d_sigma_sys_name);
         NumericVector<double>* sigma_vec = sigma_sys.solution.get();
         d_bdry_data_managers[part]->interp(sigma_idx, *sigma_vec, *Xw_vec, d_sigma_sys_name);
 
         // Then solve for U_w. We need U, X_w, X, Sigma, and Xi to solve for U_w.
-        EquationSystems* vol_eq_sys = d_vol_data_managers[part];
-        ExplicitSystem& X_sys = vol_eq_sys->get_system(d_vol_data_managers[part]->COORDINATES_SYSTEM_NAME);
+        EquationSystems* vol_eq_sys = d_vol_data_managers[part]->getEquationSystems();
+        auto& X_sys = vol_eq_sys->get_system<ExplicitSystem>(d_vol_data_managers[part]->COORDINATES_SYSTEM_NAME);
         const DofMap& X_dof_map = X_sys.get_dof_map();
         NumericVector<double>* X_vec = X_sys.current_local_solution.get();
-        ExplicitSystem& U_sys = vol_eq_sys->get_system(IBFEMethod::VELOCITY_SYSTEM_NAME);
+        auto& U_sys = vol_eq_sys->get_system<ExplicitSystem>(IBFEMethod::VELOCITY_SYSTEM_NAME);
         NumericVector<double>* U_vec = U_sys.current_local_solution.get();
 
-        ExplicitSystem& Uw_sys = eq_sys->get_system(d_velocity_sys_name);
+        auto& Uw_sys = eq_sys->get_system<ExplicitSystem>(d_velocity_sys_name);
         NumericVector<double>* Uw_vec = Uw_sys.solution.get();
 
         std::map<dof_id_type, dof_id_type> node_id_map;
@@ -346,26 +350,26 @@ BoundaryMeshMapping::findForce(const double time, const int f_idx)
     for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
     {
         const std::unique_ptr<BoundaryMesh>& bdry_mesh = d_bdry_meshes[part];
-        EquationSystems* eq_sys = d_bdry_eq_sys_vec[part];
+        EquationSystems* eq_sys = d_bdry_eq_sys_vec[part].get();
         // We need to pull out the boundary systems
-        ExplicitSystem& Xw_sys = eq_sys->get_system(d_coords_sys_name);
+        auto& Xw_sys = eq_sys->get_system<ExplicitSystem>(d_coords_sys_name);
         const DofMap& Xw_dof_map = Xw_sys.get_dof_map();
         NumericVector<double>* Xw_vec = Xw_sys.solution.get();
-        ExplicitSystem& xi_sys = eq_sys->get_system(d_xi_sys_name);
+        auto& xi_sys = eq_sys->get_system<ExplicitSystem>(d_xi_sys_name);
         const DofMap& xi_dof_map = xi_sys.get_dof_map();
         NumericVector<double>* xi_vec = xi_sys.solution.get();
-        ExplicitSystem& Uw_sys = eq_sys->get_system(d_velocity_sys_name);
+        auto& Uw_sys = eq_sys->get_system<ExplicitSystem>(d_velocity_sys_name);
         NumericVector<double>* Uw_vec = Uw_sys.solution.get();
 
-        ExplicitSystem& F_sys = eq_sys->get_system(d_force_sys_name);
+        auto& F_sys = eq_sys->get_system<ExplicitSystem>(d_force_sys_name);
         NumericVector<double>* F_vec = F_sys.solution.get();
 
         // Pull out volumetric systems
-        EquationSystems* vol_eq_sys = d_vol_data_managers[part];
-        ExplicitSystem& X_sys = vol_eq_sys->get_system(d_vol_data_managers[part]->COORDINATES_SYSTEM_NAME);
+        EquationSystems* vol_eq_sys = d_vol_data_managers[part]->getEquationSystems();
+        auto& X_sys = vol_eq_sys->get_system<ExplicitSystem>(d_vol_data_managers[part]->COORDINATES_SYSTEM_NAME);
         const DofMap& X_dof_map = X_sys.get_dof_map();
         NumericVector<double>* X_vec = X_sys.current_local_solution.get();
-        ExplicitSystem& U_sys = vol_eq_sys->get_system(IBFEMethod::VELOCITY_SYSTEM_NAME);
+        auto& U_sys = vol_eq_sys->get_system<ExplicitSystem>(IBFEMethod::VELOCITY_SYSTEM_NAME);
         NumericVector<double>* U_vec = U_sys.current_local_solution.get();
 
         // Build map between volume and boundary mesh.

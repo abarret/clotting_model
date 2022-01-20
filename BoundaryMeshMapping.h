@@ -102,7 +102,7 @@ public:
      *
      * \note This assumes the correct velocity field has been set up via the findVelocity function.
      */
-    virtual void updateBoundaryLocation(double t_start, double t_end, unsigned int part, bool end_of_timestep = false);
+    virtual void updateBoundaryLocation(double t_start, double t_end, unsigned int part, bool end_of_timestep = false, bool initial_time = false);
 
     /*!
      * \brief Initialize the equations systems. Note all systems should be registered with the Equation systems prior to
