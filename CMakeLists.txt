@@ -6,6 +6,7 @@ FIND_PACKAGE(IBAMR REQUIRED)
 SET(CXX_SRC
     ActivatedPlateletSource.cpp
     CohesionStressRHS.cpp
+    utility_functions.cpp
     )
 ADD_EXECUTABLE(main2d main.cpp)
 TARGET_SOURCES(main2d PRIVATE ${CXX_SRC})
