@@ -40,6 +40,7 @@
 #include "tbox/Utilities.h"
 
 #include <functional>
+#include <math.h>
 #include <string>
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
@@ -104,15 +105,26 @@ public:
 
     void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
 
-    inline void setPlateletIdx(const int phi_idx)
+    inline void setPlateletAIdx(const int phi_a_idx)
     {
-        d_phi_idx = phi_idx;
+        d_phi_a_idx = phi_a_idx;
+    }
+
+    inline void setPlateletBIdx(const int phi_b_idx)
+    {
+        d_phi_b_idx = phi_b_idx;
+    }
+
+    inline void setOmegaIdx(const int w_idx)
+    {
+        d_w_idx = w_idx;
     }
 
     inline void setZIdx(const int z_idx)
     {
         d_z_idx = z_idx;
     }
+    inline void 
 
 private:
     int d_phi_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index;

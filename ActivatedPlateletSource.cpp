@@ -31,13 +31,13 @@ ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> pl_n_va
 {
     // These need to be changed to the relevant parameters
     // K Constants
-    d_Kab = input_db->getDouble("Kab"); // change the get strings to fix whatever the true label is
-    d_Kaw = input_db->getDouble("Kaw");
+    const double d_Kab = input_db->getDouble("Kab"); // change the get strings to fix whatever the true label is
+    const double d_Kaw = input_db->getDouble("Kaw");
     // n constants
-    d_n_b_mx = input_db->getDouble("nbmax")
-    d_n_w_mx = input_db->getDouble("nwmax")
+    const double d_n_b_mx = input_db->getDouble("nbmax")
+    const double d_n_w_mx = input_db->getDouble("nwmax")
     // w constant
-    d_w_mx = input_db->getDouble("wmax")
+    const double d_w_mx = input_db->getDouble("wmax")
     return;
 } // ActivatedPlateletSource
 
@@ -143,8 +143,9 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
                                         Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     Pointer<CellData<NDIM, double>> F_data = patch->getPatchData(data_idx);
-    F_data->fillAll(0.0); // rename to alpha?
+    F_data->fillAll(0.0);
     if (initial_time) return;
+    // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates to **)
     Pointer<CellData<NDIM, double>> pl_n_data =
         patch->getPatchData(d_pl_n_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> c_data =
@@ -152,13 +153,16 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     const Box<NDIM>& patch_box = patch->getBox();
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
-        // compute R2 R3 and R4 -> alpha
+        // compute R2 R4
         // the four patch variables we now have are phi_a, phi_b, z_b, and w.
         const double d_eta_b = 1.0; // placeholder since idk how to compute it
         const CellIndex<NDIM>& idx = ci();
         // Compute source data (relaxation term)
+        // WHERE DO I GET THESE VARIABLES ** 
         double d_phi_a = (*phi_a_data)(idx);
+        double d_phi_b = (*phi_b_data)(idx);
         double d_w = (*w_data)(idx);
+        double d_z = (*z_data)(idx);
         // Compute the source terms
         const double d_R2 = d_Kab * d_n_b_mx * d_phi_a * d_eta_b;
         const double d_R4 = d_Kaw * d_n_w_mx * (d_w_mx - d_w) * d_n_b_mx * d_phi_a;
