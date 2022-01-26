@@ -38,6 +38,8 @@
 #include "tbox/Database.h"
 #include "tbox/Pointer.h"
 #include "tbox/Utilities.h"
+#include "utility_functions.h"
+
 
 #include <functional>
 #include <math.h>
@@ -105,6 +107,8 @@ public:
 
     void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
 
+    void registerPhiConvFcn(std::function<double(double, void*)> fcn);
+
     inline void setPlateletAIdx(const int phi_a_idx)
     {
         d_phi_a_idx = phi_a_idx;
@@ -127,10 +131,19 @@ public:
     inline void 
 
 private:
-    int d_phi_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index;
-    double d_a2 = std::numeric_limits<double>::quiet_NaN();
+    int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index;
+    double d_s0 = std::numeric_limits<double>::quiet_NaN();
+    double d_c4 = std::numeric_limits<double>::quiet_NaN();
+    double d_Kab = std::numeric_limits<double>::quiet_NaN();
+    double d_Kbb = std::numeric_limits<double>::quiet_NaN();
+    double d_Kaw = std::numeric_limits<double>::quiet_NaN();
+    double d_n_b_mx = std::numeric_limits<double>::quiet_NaN();
+    double d_n_w_mx = std::numeric_limits<double>::quiet_NaN();
+    double d_w_mx = std::numeric_limits<double>::quiet_NaN();
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
+    // phi function point for convolution
+    std::function<double(double)> d_conv_phi_fcn; 
 };
 
 } // Namespace IBAMR

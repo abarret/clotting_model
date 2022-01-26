@@ -15,6 +15,7 @@
 #define included_ActivatedPlateletSource
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
+#include "utility_functions.h"
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
 namespace IBAMR
@@ -89,10 +90,11 @@ public:
 
 private:
     ActivatedPlateletSource() = delete;
-    // R(c) constants
-    double d_ct = std::numeric_limits<double>::quiet_NaN(); // concentration threshold for activation
-    double d_r0 = std::numeric_limits<double>::quiet_NaN(); // base rate of platelet activation
-    double d_k = std::numeric_limits<double>::quiet_NaN(); // platelet degredation rate?
+    double d_Kab = std::numeric_limits<double>::quiet_NaN();
+    double d_Kaw = std::numeric_limits<double>::quiet_NaN();
+    double d_n_b_mx = std::numeric_limits<double>::quiet_NaN();
+    double d_n_w_mx = std::numeric_limits<double>::quiet_NaN();
+    double d_w_mx = std::numeric_limits<double>::quiet_NaN();
 
     ActivatedPlateletSource(const ActivatedPlateletSource& from) = delete;
 

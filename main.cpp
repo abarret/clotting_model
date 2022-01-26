@@ -66,28 +66,29 @@ void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
 struct BetaFcn
 {
 public:
-    BetaFcn(const double eps_0, const double beta_0, const double beta_1)
-        : d_eps_0(eps_0), d_beta_0(beta_0), d_beta_1(beta_1)
+    BetaFcn(const double R0, const double beta_0, const double S0, const double lambda)
+        : d_R0(R0), d_beta_0(beta_0), d_S0(S0), d_lambda(lambda)
     {
         // intentionally blank
         return;
     }
     double beta(const double eps)
     {
-        if (eps > d_eps_0)
+        if (eps > d_R0)
         {
-            return d_beta_0;
+            return d_beta_0 * std::exp(d_lambda* d_S0 * (eps - d_R0));
         }
         else
         {
-            return d_beta_0 * std::exp(d_beta_1 * (eps - d_eps_0));
+            return d_beta_0;
         }
     }
 
 private:
-    double d_eps_0 = std::numeric_limits<double>::quiet_NaN();
+    double d_R0 = std::numeric_limits<double>::quiet_NaN();
     double d_beta_0 = std::numeric_limits<double>::quiet_NaN();
-    double d_beta_1 = std::numeric_limits<double>::quiet_NaN();
+    double d_S0 = std::numeric_limits<double>::quiet_NaN();
+    double d_lambda = std::numeric_limits<double>::quiet_NaN();
 };
 
 double
@@ -95,6 +96,15 @@ beta_wrapper(const double eps, void* ctx)
 {
     auto beta_fcn = static_cast<BetaFcn*>(ctx);
     return beta_fcn->beta(eps);
+}
+
+double phi_conv(double x) {
+    double abs = std::abs(x);
+    if (abs < 1.0) {
+        return 1.0 - abs;
+    } else {
+        return 0.0
+    }
 }
 
 namespace ModelData
@@ -368,6 +378,7 @@ main(int argc, char* argv[])
         // eps0 = (3*a2) / a0
         BetaFcn betaFcn(0.0, 0.0, 0.0);
         cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
+        cohesion_relax->registerPhiConvFcn(phi_conv);
 
         // Set up platelet and activating chemical advection
         Pointer<CellVariable<NDIM, double>> phi_n_var = new CellVariable<NDIM, double>("phi_n");

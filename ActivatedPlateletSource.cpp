@@ -154,30 +154,18 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         // compute R2 R4
-        // the four patch variables we now have are phi_a, z_b, and w.
-        const double d_eta_b = 1.0; // placeholder since idk how to compute it
+        // the four patch variables we now have are phi_a and w.
+        const double eta_b = 1.0; // placeholder since idk how to compute it
         const CellIndex<NDIM>& idx = ci();
         // Compute source data (relaxation term)
         // WHERE DO I GET THESE VARIABLES ** 
-        double d_phi_a = (*phi_a_data)(idx);
-        double d_w = (*w_data)(idx);
-        double d_z = (*z_data)(idx);
+        double phi_a = (*phi_a_data)(idx);
+        double w = (*w_data)(idx);
         // Compute the source terms
-        const double d_R2 = d_Kab * d_n_b_mx * d_phi_a * d_eta_b;
-        const double d_R4 = d_Kaw * d_n_w_mx * (d_w_mx - d_w) * d_n_b_mx * d_phi_a;
-        (*F_data)(idx) = d_R2 + d_R4;
+        const double R2 = d_Kab * d_n_b_mx * phi_a * eta_b;
+        const double R4 = d_Kaw * d_n_w_mx * (d_w_mx - w) * d_n_b_mx * phi_a;
+        (*F_data)(idx) = R2 + R4;
     }
     return;
 } // setDataOnPatch
-
-
-ActivatedPlateletSource::setDataOnPatchLevel(const int data_idx,
-                            Pointer<Variable<NDIM>> var /* var */,
-                            Pointer<PatchLevel<NDIM>> p_level /* patch level */,
-                            const double data_time,
-                            const bool initial_time = false)
-{
-    // Much ado about patch levels, though I don't fully understand their nuances even now
-    // I will discuss this with Aaron tomorrow.
-} // setDataOnPatchLevel
 //////////////////////////////////////////////////////////////////////////////
