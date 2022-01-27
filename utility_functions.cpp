@@ -33,7 +33,6 @@ convolution(double alpha,
     {
         const CellIndex<NDIM>& n_idx = ci();
         double phi_weight = 1.0;
-        ;
         for (int d = 0; d < NDIM; ++d) phi_weight *= phi(static_cast<double>(n_idx(d) - idx(d))) * dx[d];
         convolve += (alpha * a_data(n_idx) + beta * b_data(n_idx)) * phi_weight;
     }
