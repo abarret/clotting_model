@@ -1,9 +1,10 @@
 #ifndef included_IBAMR_BoundaryMeshMapping
 #define included_IBAMR_BoundaryMeshMapping
-#include "ibtk/FEDataManager.h"
+#include <ibtk/CartGridFunction.h>
+#include <ibtk/FEDataManager.h>
 
-#include "libmesh/boundary_mesh.h"
-#include "libmesh/mesh.h"
+#include <libmesh/boundary_mesh.h>
+#include <libmesh/mesh.h>
 
 namespace IBAMR
 {
@@ -13,7 +14,7 @@ namespace IBAMR
  * Implementations for this object should define how the object moves. A default implementation of no motion is
  * included.
  */
-class BoundaryMeshMapping
+class BoundaryMeshMapping : IBTK::CartGridFunction
 {
 public:
     /*!
@@ -85,6 +86,26 @@ public:
         return data_managers;
     }
 
+    void setDataOnPatchHierarchy(int data_idx,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>>,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> hierarchy,
+                                 double data_time,
+                                 bool initial_time = false,
+                                 int coarsest_ln = -1,
+                                 int finest_ln = -1) override;
+
+    void setDataOnPatch(int data_idx,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
+                        double data_time,
+                        bool initial_time = false,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> level = nullptr) override;
+
+    inline bool isTimeDependent() const override
+    {
+        return true;
+    };
+
     //\}
 
     /*!
@@ -94,15 +115,14 @@ public:
      *
      * \note This assumes the correct velocity field has been set up via the findVelocity function.
      */
-    virtual void
-    updateBoundaryLocation(double t_start, double t_end, bool end_of_timestep = false, bool initial_time = false);
+    virtual void updateBoundaryLocation(double t_start, double t_end, bool initial_time = false);
     /*!
      * Update the location of the boundary mesh for a specific part. An optional argument is provided if the location of
      * the structure is needed at the end of the timestep. By default this function does nothing.
      *
      * \note This assumes the correct velocity field has been set up via the findVelocity function.
      */
-    virtual void updateBoundaryLocation(double t_start, double t_end, unsigned int part, bool end_of_timestep = false, bool initial_time = false);
+    virtual void updateBoundaryLocation(double t_start, double t_end, unsigned int part);
 
     /*!
      * \brief Initialize the equations systems. Note all systems should be registered with the Equation systems prior to
@@ -157,6 +177,11 @@ protected:
     // Force balance data
     double d_Sw = std::numeric_limits<double>::quiet_NaN();
     double d_abs_thresh = 1.0e-8;
+
+    SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> d_input_db;
+
+    SAMRAI::tbox::Pointer<SAMRAI::pdat::SideVariable<NDIM, double>> d_f_var;
+    int d_f_idx = IBTK::invalid_index;
 
 private:
     void commonConstructor(SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,

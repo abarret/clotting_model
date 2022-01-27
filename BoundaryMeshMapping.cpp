@@ -4,6 +4,7 @@
 #include "ibtk/IBTK_MPI.h"
 #include "ibtk/IndexUtilities.h"
 #include "ibtk/libmesh_utilities.h"
+#include <ibtk/LEInteractor.h>
 
 #include "BoundaryMeshMapping.h"
 
@@ -64,6 +65,7 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
     d_bdry_eq_sys_vec.resize(num_parts);
     d_fe_data.resize(num_parts);
     d_hierarchy = d_vol_data_managers[0]->getPatchHierarchy();
+    d_input_db = input_db;
     for (unsigned int part = 0; part < num_parts; ++part)
     {
         // TODO: We need some way to extract a boundary mesh. For now, because we only have one part, we can extract the
@@ -116,7 +118,8 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
             for (unsigned int d = 0; d < NDIM; ++d) dX_sys.add_variable("dX_" + std::to_string(d), FEType());
             auto& U_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_velocity_sys_name);
             for (unsigned int d = 0; d < NDIM; ++d) U_sys.add_variable("U_" + std::to_string(d), FEType());
-            d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_xi_sys_name);
+            auto& Xi_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_xi_sys_name);
+            Xi_sys.add_variable(d_xi_sys_name);
             auto& Sigma_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_sigma_sys_name);
             for (unsigned int d = 0; d < NDIM; ++d) Sigma_sys.add_variable("Sigma_" + std::to_string(d), FEType());
             auto& force_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_force_sys_name);
@@ -126,23 +129,19 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
             dX_sys.assemble_before_solve = false;
             dX_sys.assemble();
         }
-
-        d_bdry_data_managers.push_back(
-            FEDataManager::getManager(d_fe_data[part],
-                                      d_object_name + "::FEDataManager::" + std::to_string(part),
-                                      input_db,
-                                      d_hierarchy->getFinestLevelNumber(),
-                                      d_vol_data_managers[part]->getDefaultInterpSpec(),
-                                      d_vol_data_managers[part]->getDefaultSpreadSpec(),
-                                      FEDataManager::WorkloadSpec()));
     }
+
+    // Register forcing term
+    auto var_db = VariableDatabase<NDIM>::getDatabase();
+    d_f_var = new SideVariable<NDIM, double>(d_object_name + "::F_var");
+    d_f_idx = var_db->registerVariableAndContext(
+        d_f_var, var_db->getContext(d_object_name + "::context"), IntVector<NDIM>(6));
     return;
 }
 
 void
 BoundaryMeshMapping::updateBoundaryLocation(const double t_start,
                                             const double t_end,
-                                            const bool end_of_timestep,
                                             const bool initial_time)
 {
     if (initial_time)
@@ -151,18 +150,13 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start,
     }
     else
     {
-        for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
-            updateBoundaryLocation(t_start, t_end, part, end_of_timestep);
+        for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part) updateBoundaryLocation(t_start, t_end, part);
     }
     return;
 }
 
 void
-BoundaryMeshMapping::updateBoundaryLocation(const double t_start,
-                                            const double t_end,
-                                            const unsigned int part,
-                                            const bool end_of_timestep,
-                                            const bool initial_time)
+BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t_end, const unsigned int part)
 {
     const double dt = t_end - t_start;
     // Boundary moves according to what's in the velocity systems
@@ -191,15 +185,8 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start,
         // Use forward Euler
         for (int d = 0; d < NDIM; ++d)
         {
-            if (initial_time)
-            {
-                X_vec->set(X_dofs[d], (*node)(d));
-            }
-            else
-            {
-                X_vec->set(X_dofs[d], (*X_vec)(X_dofs[d]) + dt * (*U_vec)(U_dofs[d]));
-                dX_vec->set(dX_dofs[d], (*node)(d) - (*X_vec)(X_dofs[d]));
-            }
+            X_vec->set(X_dofs[d], (*X_vec)(X_dofs[d]) + dt * (*U_vec)(U_dofs[d]));
+            dX_vec->set(dX_dofs[d], (*node)(d) - (*X_vec)(X_dofs[d]));
         }
     }
     X_vec->close();
@@ -250,11 +237,22 @@ BoundaryMeshMapping::initializeEquationSystems()
 {
     const bool from_restart = RestartManager::getManager()->isFromRestart();
     if (from_restart) return;
+    d_hierarchy = d_vol_data_managers[0]->getPatchHierarchy();
     for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
     {
         d_bdry_eq_sys_vec[part]->init();
+        d_bdry_data_managers.push_back(
+            FEDataManager::getManager(d_fe_data[part],
+                                      d_object_name + "::FEDataManager::" + std::to_string(part),
+                                      d_input_db,
+                                      d_hierarchy->getFinestLevelNumber() + 1,
+                                      d_vol_data_managers[part]->getDefaultInterpSpec(),
+                                      d_vol_data_managers[part]->getDefaultSpreadSpec(),
+                                      FEDataManager::WorkloadSpec()));
+        d_bdry_data_managers[part]->COORDINATES_SYSTEM_NAME = d_coords_sys_name;
+        d_bdry_data_managers[part]->setPatchHierarchy(d_hierarchy);
     }
-    updateBoundaryLocation(0.0, 0.0, false);
+    updateBoundaryLocation(0.0, 0.0, true);
     return;
 }
 
@@ -263,6 +261,7 @@ BoundaryMeshMapping::findVelocity(const double time, const int xi_idx, const int
 {
     for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
     {
+        d_bdry_data_managers[part]->reinitElementMappings();
         const std::unique_ptr<BoundaryMesh>& bdry_mesh = d_bdry_meshes[part];
         EquationSystems* eq_sys = d_bdry_eq_sys_vec[part].get();
         // First we need to interpolate xi and sigma to the structure. Use the FEDataManager for this
@@ -362,6 +361,7 @@ BoundaryMeshMapping::findForce(const double time, const int f_idx)
         NumericVector<double>* Uw_vec = Uw_sys.solution.get();
 
         auto& F_sys = eq_sys->get_system<ExplicitSystem>(d_force_sys_name);
+        const DofMap& F_dof_map = F_sys.get_dof_map();
         NumericVector<double>* F_vec = F_sys.solution.get();
 
         // Pull out volumetric systems
@@ -431,9 +431,159 @@ BoundaryMeshMapping::findForce(const double time, const int f_idx)
         // Now update the forces
         F_vec->close();
         F_sys.update();
-        // Now spread the force into f_idx:
-        d_bdry_data_managers[part]->spread(f_idx, *F_vec, *Xw_vec, d_force_sys_name);
+        // Now spread the force into d_f_idx:
+        // We need to spread from volumetric points.
+        // Figure out which points are inside patch
+        const std::vector<std::vector<Node*>>& active_bdry_nodes = d_bdry_data_managers[part]->getActivePatchNodeMap();
+        // Assume we are on the finest level
+        {
+            Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(d_hierarchy->getFinestLevelNumber());
+            int local_patch_num = 0;
+            for (PatchLevel<NDIM>::Iterator p(level); p; p++, ++local_patch_num)
+            {
+                Pointer<Patch<NDIM>> patch = level->getPatch(p());
+                const std::vector<Node*>& patch_nodes = active_bdry_nodes[local_patch_num];
+                const size_t num_active_patch_nodes = patch_nodes.size();
+                if (patch_nodes.empty()) continue;
+
+                Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
+                const double* const patch_lower = pgeom->getXLower();
+                const double* const patch_upper = pgeom->getXUpper();
+                std::array<bool, NDIM> touches_upper_regular_bdry;
+                for (int d = 0; d < NDIM; ++d) touches_upper_regular_bdry[d] = pgeom->getTouchesRegularBoundary(d, 1);
+
+                std::vector<double> F_node, X_node;
+                X_node.reserve(NDIM * num_active_patch_nodes);
+                F_node.reserve(NDIM * num_active_patch_nodes);
+                std::vector<dof_id_type> F_idxs, X_idxs;
+                IBTK::Point X;
+                for (const auto& n : patch_nodes)
+                {
+                    bool inside_patch = true;
+                    // Get corresponding node on volumetric mesh
+                    dof_id_type bdry_node_id = n->id();
+                    // Determine volume node. TODO: This is potentially expensive. We should cache our own map.
+                    auto vol_iter = std::find_if(node_id_map.begin(),
+                                                 node_id_map.end(),
+                                                 [bdry_node_id](const std::pair<dof_id_type, dof_id_type>& obj) {
+                                                     return obj.second == bdry_node_id;
+                                                 });
+                    dof_id_type vol_node_id = vol_iter->first;
+                    const Node* const vol_n = d_vol_meshes[part]->node_ptr(vol_node_id);
+                    for (unsigned int d = 0; d < NDIM; ++d)
+                    {
+                        IBTK::get_nodal_dof_indices(X_dof_map, vol_n, d, X_idxs);
+                        X[d] = (*X_vec)(X_idxs[0]);
+                        inside_patch =
+                            inside_patch && (X[d] >= patch_lower[d]) &&
+                            ((X[d] < patch_upper[d]) || (touches_upper_regular_bdry[d] && X[d] <= patch_upper[d]));
+                    }
+                    if (inside_patch)
+                    {
+                        for (unsigned int i = 0; i < NDIM; ++i)
+                        {
+                            IBTK::get_nodal_dof_indices(F_dof_map, n, i, F_idxs);
+                            for (const auto& F_idx : F_idxs) F_node.push_back((*F_vec)(F_idx));
+                        }
+                        X_node.insert(X_node.end(), &X[0], &X[0] + NDIM);
+                    }
+                }
+                TBOX_ASSERT(F_node.size() <= NDIM * num_active_patch_nodes);
+                TBOX_ASSERT(X_node.size() <= NDIM * num_active_patch_nodes);
+
+                // Now we spread values
+                const Box<NDIM>& spread_box = patch->getBox();
+                Pointer<SideData<NDIM, double>> f_data = patch->getPatchData(d_f_idx);
+                LEInteractor::spread(f_data,
+                                     F_node,
+                                     NDIM,
+                                     X_node,
+                                     NDIM,
+                                     patch,
+                                     spread_box,
+                                     d_bdry_data_managers[part]->getDefaultInterpSpec().kernel_fcn);
+            }
+        }
+        // Now copy data back to f_idx.
+        for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
+        {
+            Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
+            for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+            {
+                Pointer<Patch<NDIM>> patch = level->getPatch(p());
+                Pointer<SideData<NDIM, double>> src_data = patch->getPatchData(d_f_idx);
+                Pointer<PatchData<NDIM>> dst_data = patch->getPatchData(f_idx);
+                dst_data->copy(*src_data);
+            }
+        }
     }
+}
+
+void
+BoundaryMeshMapping::setDataOnPatchHierarchy(int data_idx,
+                                             Pointer<hier::Variable<NDIM>> var,
+                                             Pointer<PatchHierarchy<NDIM>> hierarchy,
+                                             const double data_time,
+                                             const bool initial_time,
+                                             int coarsest_ln,
+                                             int finest_ln)
+{
+    // We need to fill in the force data
+    if (initial_time)
+    {
+        // Just set it to zero at initial time.
+        coarsest_ln = coarsest_ln < 0 ? 0 : coarsest_ln;
+        finest_ln = finest_ln < 0 ? hierarchy->getFinestLevelNumber() : finest_ln;
+        for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+        {
+            Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+            setDataOnPatchLevel(data_idx, var, level, data_time, initial_time);
+        }
+        return;
+    }
+    // Allocate patch data
+    for (int ln = 0; ln <= hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        if (!level->checkAllocated(d_f_idx)) level->allocatePatchData(d_f_idx);
+        for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+        {
+            Pointer<Patch<NDIM>> patch = level->getPatch(p());
+            Pointer<SideData<NDIM, double>> f_data = patch->getPatchData(d_f_idx);
+            f_data->fillAll(0.0);
+        }
+    }
+
+    // Find force
+    findForce(data_time, data_idx);
+
+    // Deallocate patch data
+    for (int ln = 0; ln <= hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        if (level->checkAllocated(d_f_idx)) level->deallocatePatchData(d_f_idx);
+    }
+}
+
+void
+BoundaryMeshMapping::setDataOnPatch(const int data_idx,
+                                    Pointer<hier::Variable<NDIM>> /*var*/,
+                                    Pointer<Patch<NDIM>> patch,
+                                    const double /*data_time*/,
+                                    const bool /*initial_time*/,
+                                    Pointer<PatchLevel<NDIM>> /*level*/)
+{
+    Pointer<CellData<NDIM, double>> cc_data = patch->getPatchData(data_idx);
+    Pointer<SideData<NDIM, double>> sc_data = patch->getPatchData(data_idx);
+    Pointer<FaceData<NDIM, double>> fc_data = patch->getPatchData(data_idx);
+    if (cc_data)
+        cc_data->fillAll(0.0);
+    else if (sc_data)
+        sc_data->fillAll(0.0);
+    else if (fc_data)
+        fc_data->fillAll(0.0);
+    else
+        TBOX_ERROR(d_object_name + ": Unknown data centering\n");
 }
 
 void
