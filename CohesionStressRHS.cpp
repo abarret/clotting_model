@@ -78,6 +78,7 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
         double phi_b = (*phi_b_data)(idx);
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
+        // Technically phi_width should not be hardcoded here
         const double eta_b = convolution(d_n_b_mx, phi_b, -2.0, z_data, d_conv_phi_fcn, 2.0, idx, dx);
         // Compute the source terms
         const double R2 = d_Kab * d_n_b_mx * phi_a * eta_b;
@@ -116,7 +117,7 @@ CohesionStressRHS::registerBetaFcn(std::function<double(double, void*)> wrapper,
 }
 
 void
-CohesionStressRHS::registerPhiConvFcn(std::function<double(double, void*)> fcn) {
+CohesionStressRHS::registerPhiConvFcn(std::function<double(double)> fcn) {
     d_conv_phi_fcn = fcn;
 }
 

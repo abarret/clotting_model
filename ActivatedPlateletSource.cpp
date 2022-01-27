@@ -145,22 +145,30 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> F_data = patch->getPatchData(data_idx);
     F_data->fillAll(0.0);
     if (initial_time) return;
+    Pointer<CartesianPatchGeometry<NDIM> > pgeom = patch->getPatchGeometry();
+    const double* const dx = pgeom->getDx();
     // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates to **)
-    Pointer<CellData<NDIM, double>> pl_n_data =
-        patch->getPatchData(d_pl_n_var, d_adv_diff_hier_integrator->getScratchContext());
-    Pointer<CellData<NDIM, double>> c_data =
-        patch->getPatchData(d_c_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> phi_a_data =
+        patch->getPatchData(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> phi_b_data =
+        patch->getPatchData(d_phi_b_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> w_data =
+        patch->getPatchData(d_w_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> z_data =
+        patch->getPatchData(d_z_var, d_adv_diff_hier_integrator->getScratchContext());
     const Box<NDIM>& patch_box = patch->getBox();
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         // compute R2 R4
         // the four patch variables we now have are phi_a and w.
-        const double eta_b = 1.0; // placeholder since idk how to compute it
         const CellIndex<NDIM>& idx = ci();
         // Compute source data (relaxation term)
         // WHERE DO I GET THESE VARIABLES ** 
         double phi_a = (*phi_a_data)(idx);
+        double phi_b = (*phi_b_data)(idx);
         double w = (*w_data)(idx);
+        // Technically phi_width should not be hardcoded here
+        const double eta_b = convolution(d_n_b_mx, phi_b, -2.0, z_data, d_conv_phi_fcn, 2.0, idx, dx);
         // Compute the source terms
         const double R2 = d_Kab * d_n_b_mx * phi_a * eta_b;
         const double R4 = d_Kaw * d_n_w_mx * (d_w_mx - w) * d_n_b_mx * phi_a;
@@ -168,4 +176,9 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     }
     return;
 } // setDataOnPatch
+
+
+ActivatedPlateletSource::::registerPhiConvFcn(std::function<double(double)> fcn) {
+    d_conv_phi_fcn = fcn;
+} // registerPhiConvFcn
 //////////////////////////////////////////////////////////////////////////////

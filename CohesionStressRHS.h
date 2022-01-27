@@ -107,7 +107,7 @@ public:
 
     void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
 
-    void registerPhiConvFcn(std::function<double(double, void*)> fcn);
+    void registerPhiConvFcn(std::function<double(double)> fcn);
 
     inline void setPlateletAIdx(const int phi_a_idx)
     {

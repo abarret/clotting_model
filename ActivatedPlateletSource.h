@@ -84,9 +84,9 @@ public:
                             const bool initial_time = false) override;
 
     /*!
-     * \brief Defines the smooth Heaviside function to be used by this class
+     * \brief Set phi function for convolution
      */
-    std::function<double(double)> *Heaviside; // correct this if neccesary
+    void registerPhiConvFcn(std::function<double(double)> fcn);
 
 private:
     ActivatedPlateletSource() = delete;
@@ -100,7 +100,10 @@ private:
 
     ActivatedPlateletSource& operator=(const ActivatedPlateletSource& that) = delete;
 
-    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_pl_n_var, d_c_var;
+    // phi function point for convolution
+    std::function<double(double)> d_conv_phi_fcn; 
+
+    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_a_var, d_phi_b_var, d_w_var, d_z_var;
     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
 };
 } // namespace IBAMR
