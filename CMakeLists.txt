@@ -1,9 +1,10 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.15.0)
 
-PROJECT(AV_2D LANGUAGES C CXX Fortran)
+PROJECT(Clotting LANGUAGES C CXX Fortran)
 FIND_PACKAGE(IBAMR REQUIRED)
 
 SET(CXX_SRC
+    ActivatedPlateletSource.cpp
     CohesionStressRHS.cpp
     utility_functions.cpp
     )

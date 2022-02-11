@@ -51,6 +51,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <math.h>
 
 // Local Headers
 #include "CohesionStressRHS.h"
@@ -65,26 +66,26 @@ void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
 struct BetaFcn
 {
 public:
-    BetaFcn(const double eps_0, const double beta_0, const double beta_1)
-        : d_eps_0(eps_0), d_beta_0(beta_0), d_beta_1(beta_1)
+    BetaFcn(const double R0, const double beta_0, const double beta_1)
+        : d_R0(R0), d_beta_0(beta_0), d_beta_1(beta_1)
     {
         // intentionally blank
         return;
     }
     double beta(const double eps)
     {
-        if (eps > d_eps_0)
+        if (eps > d_R0)
         {
-            return d_beta_0;
+            return d_beta_0 * std::exp(d_beta_1 * (eps - d_R0));
         }
         else
         {
-            return d_beta_0 * std::exp(d_beta_1 * (eps - d_eps_0));
+            return d_beta_0;
         }
     }
 
 private:
-    double d_eps_0 = std::numeric_limits<double>::quiet_NaN();
+    double d_R0 = std::numeric_limits<double>::quiet_NaN();
     double d_beta_0 = std::numeric_limits<double>::quiet_NaN();
     double d_beta_1 = std::numeric_limits<double>::quiet_NaN();
 };

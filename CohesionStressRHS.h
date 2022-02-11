@@ -38,8 +38,11 @@
 #include "tbox/Database.h"
 #include "tbox/Pointer.h"
 #include "tbox/Utilities.h"
+#include "utility_functions.h"
+
 
 #include <functional>
+#include <math.h>
 #include <string>
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
@@ -104,9 +107,24 @@ public:
 
     void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
 
-    inline void setPlateletIdx(const int phi_idx)
+    inline void setPlateletAIdx(const int phi_a_idx)
     {
-        d_phi_idx = phi_idx;
+        d_phi_a_idx = phi_a_idx;
+    }
+
+    inline void setPlateletUIdx(const int phi_u_idx)
+    {
+        d_phi_u_idx = phi_u_idx;
+    }
+
+    inline void setWccIdx( const int w_cc_idx)
+    {
+        d_W_cc_idx = w_cc_idx;
+    }
+
+    inline void setOmegaIdx(const int w_idx)
+    {
+        d_w_idx = w_idx;
     }
 
     inline void setZIdx(const int z_idx)
@@ -114,11 +132,23 @@ public:
         d_z_idx = z_idx;
     }
 
+
+    inline void setKernel(const IBAMR::Kernel kern)
+    {
+        d_kernel = kern;
+    }
+
 private:
-    int d_phi_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index;
-    double d_a2 = std::numeric_limits<double>::quiet_NaN();
+    int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index, d_phi_u_idx = IBTK::invalid_index, d_W_cc_idx = IBTK::invalid_index;
+    double d_c4 = std::numeric_limits<double>::quiet_NaN();
+    double d_a0 = std::numeric_limits<double>::quiet_NaN();
+    double d_a0w =  = std::numeric_limits<double>::quiet_NaN();
+    double d_w_mx = std::numeric_limits<double>::quiet_NaN();
+    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL;
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
+    // phi function point for convolution
+    std::function<double(double)> d_conv_phi_fcn; 
 };
 
 } // Namespace IBAMR
