@@ -157,6 +157,7 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> z_data =
         patch->getPatchData(d_z_var, d_adv_diff_hier_integrator->getScratchContext());
     const Box<NDIM>& patch_box = patch->getBox();
+    auto phi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         // compute R2 R4
@@ -167,8 +168,7 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
         double phi_a = (*phi_a_data)(idx);
         double phi_b = (*phi_b_data)(idx);
         double w = (*w_data)(idx);
-        // Technically phi_width should not be hardcoded here
-        const double eta_b = convolution(d_n_b_mx, phi_b, -2.0, z_data, d_conv_phi_fcn, 2.0, idx, dx);
+        const double eta_b = IBAMR::convolution(d_n_b_mx, phi_b, -2.0, z_data, phi_fcn.first, phi_fcn.second, idx, dx);
         // Compute the source terms
         const double R2 = d_Kab * d_n_b_mx * phi_a * eta_b;
         const double R4 = d_Kaw * d_n_w_mx * (d_w_mx - w) * d_n_b_mx * phi_a;

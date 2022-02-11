@@ -62,6 +62,7 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> phi_b_data = patch->getPatchData(d_phi_b_idx);
     Pointer<CellData<NDIM, double>> z_data = patch->getPatchData(d_z_idx);
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
+    auto phi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     ret_data->fillAll(0.0);
     if (initial_time) return;
     for (CellIterator<NDIM> i(patch_box); i; i++)
@@ -78,8 +79,7 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
         double phi_b = (*phi_b_data)(idx);
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
-        // Technically phi_width should not be hardcoded here
-        const double eta_b = convolution(d_n_b_mx, phi_b, -2.0, z_data, d_conv_phi_fcn, 2.0, idx, dx);
+        const double eta_b = IBAMR::convolution(d_n_b_mx, phi_b, -2.0, z_data, phi_fcn.first, phi_fcn.second, idx, dx);
         // Compute the source terms
         const double R2 = d_Kab * d_n_b_mx * phi_a * eta_b;
         const double R3 = d_Kbb * (d_n_b_mx * phi_b - 2.0 * z) * (d_n_b_mx * phi_b - 2.0 * z);
@@ -114,11 +114,6 @@ CohesionStressRHS::registerBetaFcn(std::function<double(double, void*)> wrapper,
 {
     // We set beta here
     d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
-}
-
-void
-CohesionStressRHS::registerPhiConvFcn(std::function<double(double)> fcn) {
-    d_conv_phi_fcn = fcn;
 }
 
 } // namespace IBAMR

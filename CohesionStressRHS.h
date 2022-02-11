@@ -107,8 +107,6 @@ public:
 
     void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
 
-    void registerPhiConvFcn(std::function<double(double)> fcn);
-
     inline void setPlateletAIdx(const int phi_a_idx)
     {
         d_phi_a_idx = phi_a_idx;
@@ -128,7 +126,12 @@ public:
     {
         d_z_idx = z_idx;
     }
-    inline void 
+
+
+    inline void setKernel(const IBAMR::Kernel kern)
+    {
+        d_kernel = kern;
+    }
 
 private:
     int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index;
@@ -140,6 +143,7 @@ private:
     double d_n_b_mx = std::numeric_limits<double>::quiet_NaN();
     double d_n_w_mx = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
+    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
     // phi function point for convolution

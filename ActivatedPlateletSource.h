@@ -83,10 +83,11 @@ public:
                             const double data_time,
                             const bool initial_time = false) override;
 
-    /*!
-     * \brief Set phi function for convolution
-     */
-    void registerPhiConvFcn(std::function<double(double)> fcn);
+    inline void setKernel(const IBAMR::Kernel kern)
+    {
+        d_kernel = kern;
+    }
+
 
 private:
     ActivatedPlateletSource() = delete;
@@ -95,13 +96,11 @@ private:
     double d_n_b_mx = std::numeric_limits<double>::quiet_NaN();
     double d_n_w_mx = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
+    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL
 
     ActivatedPlateletSource(const ActivatedPlateletSource& from) = delete;
 
     ActivatedPlateletSource& operator=(const ActivatedPlateletSource& that) = delete;
-
-    // phi function point for convolution
-    std::function<double(double)> d_conv_phi_fcn; 
 
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_a_var, d_phi_b_var, d_w_var, d_z_var;
     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
