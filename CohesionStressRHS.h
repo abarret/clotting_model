@@ -112,9 +112,14 @@ public:
         d_phi_a_idx = phi_a_idx;
     }
 
-    inline void setPlateletBIdx(const int phi_b_idx)
+    inline void setPlateletUIdx(const int phi_u_idx)
     {
-        d_phi_b_idx = phi_b_idx;
+        d_phi_u_idx = phi_u_idx;
+    }
+
+    inline void setWccIdx( const int w_cc_idx)
+    {
+        d_W_cc_idx = w_cc_idx;
     }
 
     inline void setOmegaIdx(const int w_idx)
@@ -134,14 +139,10 @@ public:
     }
 
 private:
-    int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index;
-    double d_s0 = std::numeric_limits<double>::quiet_NaN();
+    int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index, d_phi_u_idx = IBTK::invalid_index, d_W_cc_idx = IBTK::invalid_index;
     double d_c4 = std::numeric_limits<double>::quiet_NaN();
-    double d_Kab = std::numeric_limits<double>::quiet_NaN();
-    double d_Kbb = std::numeric_limits<double>::quiet_NaN();
-    double d_Kaw = std::numeric_limits<double>::quiet_NaN();
-    double d_n_b_mx = std::numeric_limits<double>::quiet_NaN();
-    double d_n_w_mx = std::numeric_limits<double>::quiet_NaN();
+    double d_a0 = std::numeric_limits<double>::quiet_NaN();
+    double d_a0w =  = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
     IBAMR::Kernel d_kernel = UNKNOWN_KERNEL
     // Beta function pointer

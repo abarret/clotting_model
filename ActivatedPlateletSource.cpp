@@ -30,14 +30,11 @@ ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> pl_n_va
     : d_pl_n_var(pl_n_var), d_c_var(c_var), d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // These need to be changed to the relevant parameters
-    // K Constants
-    const double d_Kab = input_db->getDouble("Kab"); // change the get strings to fix whatever the true label is
-    const double d_Kaw = input_db->getDouble("Kaw");
-    // n constants
-    const double d_n_b_mx = input_db->getDouble("nbmax")
-    const double d_n_w_mx = input_db->getDouble("nwmax")
+    // a0 Constants
+    d_a0 = input_db->detDouble("a0");
+    d_a0w = input_db->getDouble("a0w");
     // w constant
-    const double d_w_mx = input_db->getDouble("wmax")
+    d_w_mx = input_db->getDouble("wmax");
     return;
 } // ActivatedPlateletSource
 
@@ -150,12 +147,10 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates to **)
     Pointer<CellData<NDIM, double>> phi_a_data =
         patch->getPatchData(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
-    Pointer<CellData<NDIM, double>> phi_b_data =
-        patch->getPatchData(d_phi_b_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> phi_u_data =
+        patch->getPatchData(d_phi_u_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> w_data =
         patch->getPatchData(d_w_var, d_adv_diff_hier_integrator->getScratchContext());
-    Pointer<CellData<NDIM, double>> z_data =
-        patch->getPatchData(d_z_var, d_adv_diff_hier_integrator->getScratchContext());
     const Box<NDIM>& patch_box = patch->getBox();
     auto phi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
@@ -166,13 +161,13 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
         // Compute source data (relaxation term)
         // WHERE DO I GET THESE VARIABLES ** 
         double phi_a = (*phi_a_data)(idx);
-        double phi_b = (*phi_b_data)(idx);
+        double phi_u = (*phi_u_data)(idx);
         double w = (*w_data)(idx);
-        const double eta_b = IBAMR::convolution(d_n_b_mx, phi_b, -2.0, z_data, phi_fcn.first, phi_fcn.second, idx, dx);
+        //const double eta_b = IBAMR::convolution(d_n_b_mx, phi_u, -2.0, z_data, phi_fcn.first, phi_fcn.second, idx, dx);
         // Compute the source terms
-        const double R2 = d_Kab * d_n_b_mx * phi_a * eta_b;
-        const double R4 = d_Kaw * d_n_w_mx * (d_w_mx - w) * d_n_b_mx * phi_a;
-        (*F_data)(idx) = R2 + R4;
+        const double R2 = d_a0 * phi_a * phi_a
+        const double R4 = d_a0w * (d_w_mx - w) * phi_u;
+        (*F_data)(idx) = R2 + R4; // include f^a_u?
     }
     return;
 } // setDataOnPatch

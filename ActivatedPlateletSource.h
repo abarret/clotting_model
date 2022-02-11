@@ -91,10 +91,8 @@ public:
 
 private:
     ActivatedPlateletSource() = delete;
-    double d_Kab = std::numeric_limits<double>::quiet_NaN();
-    double d_Kaw = std::numeric_limits<double>::quiet_NaN();
-    double d_n_b_mx = std::numeric_limits<double>::quiet_NaN();
-    double d_n_w_mx = std::numeric_limits<double>::quiet_NaN();
+    double d_a0 = std::numeric_limits<double>::quiet_NaN();
+    double d_a0w = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
     IBAMR::Kernel d_kernel = UNKNOWN_KERNEL
 
@@ -102,7 +100,7 @@ private:
 
     ActivatedPlateletSource& operator=(const ActivatedPlateletSource& that) = delete;
 
-    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_a_var, d_phi_b_var, d_w_var, d_z_var;
+    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_a_var, d_phi_u_var, d_w_var;
     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
 };
 } // namespace IBAMR
