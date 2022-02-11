@@ -81,8 +81,8 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
         const double alpha = R2 + R4;
 #if (NDIM == 2)
         const double trace = (*in_data)(idx, 0) + (*in_data)(idx, 1);
-        const double d_y_brackets = std::sqrt(2.0 * trace / z);
-        const double beta = d_beta_fcn(d_y_brackets);
+        const double y_brackets = std::sqrt(2.0 * trace / (z + 1.0e-12));
+        const double beta = d_beta_fcn(y_brackets);
 
         (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*in_data)(idx, 0);
         (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*in_data)(idx, 1);
@@ -90,8 +90,8 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
 #endif
 #if (NDIM == 3)
         const double trace = (*in_data)(idx, 0) + (*in_data)(idx, 1) + (*in_data)(idx, 2);
-        const double d_y_brackets = std::sqrt(2.0 * trace / z);
-        const double beta = d_beta_fcn(d_y_brackets);
+        const double y_brackets = std::sqrt(2.0 * trace / (z+ 1.0e-12));
+        const double beta = d_beta_fcn(y_brackets);
 
         (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*in_data)(idx, 0);
         (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*in_data)(idx, 1);

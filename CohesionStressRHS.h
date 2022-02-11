@@ -144,7 +144,7 @@ private:
     double d_a0 = std::numeric_limits<double>::quiet_NaN();
     double d_a0w =  = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
-    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL
+    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL;
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
     // phi function point for convolution

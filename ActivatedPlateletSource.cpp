@@ -31,8 +31,8 @@ ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> pl_n_va
 {
     // These need to be changed to the relevant parameters
     // a0 Constants
-    d_a0 = input_db->detDouble("a0");
-    d_a0w = input_db->getDouble("a0w");
+    d_Kua = input_db->detDouble("Kua");
+    d_Kuw = input_db->getDouble("Kuw");
     // w constant
     d_w_mx = input_db->getDouble("wmax");
     return;
@@ -152,28 +152,20 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> w_data =
         patch->getPatchData(d_w_var, d_adv_diff_hier_integrator->getScratchContext());
     const Box<NDIM>& patch_box = patch->getBox();
-    auto phi_fcn = IBAMR::getKernelAndWidth(d_kernel);
+    auto psi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
-        // compute R2 R4
-        // the four patch variables we now have are phi_a and w.
         const CellIndex<NDIM>& idx = ci();
-        // Compute source data (relaxation term)
-        // WHERE DO I GET THESE VARIABLES ** 
-        double phi_a = (*phi_a_data)(idx);
+        // Compute source data (relaxation term) 
+        //double phi_a = (*phi_a_data)(idx);
         double phi_u = (*phi_u_data)(idx);
         double w = (*w_data)(idx);
-        //const double eta_b = IBAMR::convolution(d_n_b_mx, phi_u, -2.0, z_data, phi_fcn.first, phi_fcn.second, idx, dx);
-        // Compute the source terms
-        const double R2 = d_a0 * phi_a * phi_a
-        const double R4 = d_a0w * (d_w_mx - w) * phi_u;
-        (*F_data)(idx) = R2 + R4; // include f^a_u?
+        // convolve phi_a*psi
+        // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object. Can I just pass null?
+        const double eta_a = IBAMR::convolution(1.0, phi_a_data, 0.0, w_data, psi_fcn.first, psi_fcn.second, idx, dx);
+        // Compute the f^a_u
+        (*F_data)(idx) = d_Kua * phi_u * eta_a + d_Kuw * (d_w_mx - w) * phi_u; // include f^a_u?
     }
     return;
 } // setDataOnPatch
-
-
-ActivatedPlateletSource::::registerPhiConvFcn(std::function<double(double)> fcn) {
-    d_conv_phi_fcn = fcn;
-} // registerPhiConvFcn
 //////////////////////////////////////////////////////////////////////////////

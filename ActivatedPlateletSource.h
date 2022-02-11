@@ -91,10 +91,10 @@ public:
 
 private:
     ActivatedPlateletSource() = delete;
-    double d_a0 = std::numeric_limits<double>::quiet_NaN();
-    double d_a0w = std::numeric_limits<double>::quiet_NaN();
+    double d_Kua = std::numeric_limits<double>::quiet_NaN();
+    double d_Kuw = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
-    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL
+    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL;
 
     ActivatedPlateletSource(const ActivatedPlateletSource& from) = delete;
 
