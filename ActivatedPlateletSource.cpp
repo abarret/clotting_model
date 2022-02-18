@@ -168,7 +168,7 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
         double w = (*w_data)(idx);
         // convolve phi_a*psi
         // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object. Can I just pass null?
-        const double eta_a = IBAMR::convolution(1.0, phi_a_data, 0.0, w_data, psi_fcn.first, psi_fcn.second, idx, dx);
+        const double eta_a = IBAMR::convolution(1.0, *phi_a_data, 0.0, *w_data, psi_fcn.first, psi_fcn.second, idx, dx);
         // Compute the f^a_u
         (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * (d_w_mx - w) * phi_u); // f^a_u
     }
