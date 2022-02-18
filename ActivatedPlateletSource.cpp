@@ -24,14 +24,19 @@
 
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
-ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> pl_n_var,
-                                                 Pointer<Variable<NDIM>> c_var,
+ActivatedPlateletSource::ActivatedPlateletSource(Pointer<Variable<NDIM>> phi_u_var,
+                                                 Pointer<Variable<NDIM>> phi_a_var,
+                                                 Pointer<Variable<NDIM>> w_var,
+                                                 Pointer<Database> input_db,
                                                  Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
-    : d_pl_n_var(pl_n_var), d_c_var(c_var), d_adv_diff_hier_integrator(adv_diff_hier_integrator)
+    : d_phi_u_var(phi_u_var),
+      d_phi_a_var(phi_a_var),
+      d_w_var(w_var),
+      d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // These need to be changed to the relevant parameters
     // a0 Constants
-    d_Kua = input_db->detDouble("Kua");
+    d_Kua = input_db->getDouble("Kua");
     d_Kuw = input_db->getDouble("Kuw");
     // w constant
     d_w_mx = input_db->getDouble("wmax");
@@ -54,7 +59,7 @@ ActivatedPlateletSource::setDataOnPatchHierarchy(const int data_idx,
                                                  const int finest_ln_in)
 {
     // Loop over variables.
-    std::array<Pointer<Variable<NDIM>>, 3> vars = { d_phi_n_var, d_w_var, d_phi_a_var };
+    std::array<Pointer<Variable<NDIM>>, 3> vars = { d_phi_u_var, d_w_var, d_phi_a_var };
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto local_var : vars)
     {
@@ -142,9 +147,10 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> F_data = patch->getPatchData(data_idx);
     F_data->fillAll(0.0);
     if (initial_time) return;
-    Pointer<CartesianPatchGeometry<NDIM> > pgeom = patch->getPatchGeometry();
+    Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
     const double* const dx = pgeom->getDx();
-    // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates to **)
+    // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates
+    // to **)
     Pointer<CellData<NDIM, double>> phi_a_data =
         patch->getPatchData(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_u_data =
@@ -156,13 +162,14 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         const CellIndex<NDIM>& idx = ci();
-        // Compute source data (relaxation term) 
-        //double phi_a = (*phi_a_data)(idx);
+        // Compute source data (relaxation term)
+        // double phi_a = (*phi_a_data)(idx);
         double phi_u = (*phi_u_data)(idx);
         double w = (*w_data)(idx);
         // convolve phi_a*psi
-        // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object. Can I just pass null?
-        const double eta_a = IBAMR::convolution(1.0, phi_a_data, 0.0, w_data, psi_fcn.first, psi_fcn.second, idx, dx);
+        // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object. Can I
+        // just pass null?
+        const double eta_a = IBAMR::convolution(1.0, *phi_a_data, 0.0, *w_data, psi_fcn.first, psi_fcn.second, idx, dx);
         // Compute the f^a_u
         (*F_data)(idx) = d_Kua * phi_u * eta_a + d_Kuw * (d_w_mx - w) * phi_u; // include f^a_u?
     }
