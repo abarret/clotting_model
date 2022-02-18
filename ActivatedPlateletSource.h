@@ -86,7 +86,6 @@ public:
         d_sign = (positive) ? 1.0 : -1.0;
     }
 
-
 private:
     ActivatedPlateletSource() = delete;
     double d_Kua = std::numeric_limits<double>::quiet_NaN();
