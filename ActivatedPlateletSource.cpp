@@ -54,8 +54,12 @@ ActivatedPlateletSource::setDataOnPatchHierarchy(const int data_idx,
                                                  const int finest_ln_in)
 {
     // Loop over variables.
+<<<<<<< HEAD
     // phi_a, phi_u, w, and z
     std::array<Pointer<Variable<NDIM>>, 2> vars = { d_pl_n_var, d_c_var };
+=======
+    std::array<Pointer<Variable<NDIM>>, 3> vars = { d_phi_n_var, d_w_var, d_phi_a_var };
+>>>>>>> 334537f6380502c5008ea5ec195af0d460426e83
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto local_var : vars)
     {
