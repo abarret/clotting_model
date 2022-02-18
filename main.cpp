@@ -406,7 +406,6 @@ main(int argc, char* argv[])
                 var_db->mapVariableAndContextToIndex(phi_a_var, adv_diff_integrator->getCurrentContext());
             // NOTE: This should be z_var, not c_var. But we haven't set up z_var yet.
             const int z_idx = var_db->mapVariableAndContextToIndex(c_var, adv_diff_integrator->getCurrentContext());
-            cohesion_relax->setPlateletIdx(phi_a_idx);
             cohesion_relax->setZIdx(z_idx);
         }
 

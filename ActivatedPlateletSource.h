@@ -29,8 +29,10 @@ public:
     /*!
      * \brief Class constructor.
      */
-    ActivatedPlateletSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> pl_n_var,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> c_var,
+    ActivatedPlateletSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> w_var,
+                            SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                             SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
 
     /*!
@@ -74,15 +76,6 @@ public:
 
     //\}
 
-    /*!
-     * \brief Evaluate the platlet sources
-     */
-    void setDataOnPatchLevel(const int data_idx,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> p_level,
-                            const double data_time,
-                            const bool initial_time = false) override;
-
     inline void setKernel(const IBAMR::Kernel kern)
     {
         d_kernel = kern;
@@ -106,7 +99,7 @@ private:
 
     ActivatedPlateletSource& operator=(const ActivatedPlateletSource& that) = delete;
 
-    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_a_var, d_phi_u_var, d_w_var;
+    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_w_var;
     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
 };
 } // namespace IBAMR
