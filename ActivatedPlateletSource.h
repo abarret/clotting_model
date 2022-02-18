@@ -82,11 +82,17 @@ public:
         d_kernel = kern;
     }
 
+    inline void setSign(const bool positive)
+    {
+        d_sign = (positive) ? 1.0 : -1.0;
+    }
+
 private:
     ActivatedPlateletSource() = delete;
     double d_Kua = std::numeric_limits<double>::quiet_NaN();
     double d_Kuw = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
+    double d_sign = 1.0;
     IBAMR::Kernel d_kernel = UNKNOWN_KERNEL;
 
     ActivatedPlateletSource(const ActivatedPlateletSource& from) = delete;
