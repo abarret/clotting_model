@@ -54,6 +54,7 @@ ActivatedPlateletSource::setDataOnPatchHierarchy(const int data_idx,
                                                  const int finest_ln_in)
 {
     // Loop over variables.
+    // phi_a, phi_u, w, and z
     std::array<Pointer<Variable<NDIM>>, 2> vars = { d_pl_n_var, d_c_var };
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto local_var : vars)
@@ -164,7 +165,7 @@ ActivatedPlateletSource::setDataOnPatch(const int data_idx,
         // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object. Can I just pass null?
         const double eta_a = IBAMR::convolution(1.0, phi_a_data, 0.0, w_data, psi_fcn.first, psi_fcn.second, idx, dx);
         // Compute the f^a_u
-        (*F_data)(idx) = d_Kua * phi_u * eta_a + d_Kuw * (d_w_mx - w) * phi_u; // include f^a_u?
+        (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * (d_w_mx - w) * phi_u); // f^a_u
     }
     return;
 } // setDataOnPatch
