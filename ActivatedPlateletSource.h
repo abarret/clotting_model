@@ -82,9 +82,9 @@ public:
         d_kernel = kern;
     }
 
-    inline voil setSign(const bool positive)
+    inline void setSign(const bool positive)
     {
-        d_sign = positive ? 1.0 : -1.0;
+        d_sign = (positive) ? 1.0 : -1.0;
     }
 
 private:
