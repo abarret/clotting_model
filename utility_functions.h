@@ -62,15 +62,15 @@ enum_to_string<Kernel>(Kernel val)
 /*
  * Function that evaluates the BSpline 2 kernel. Note that this is just a hat function.
  */
-double bspline_2(const double x);
+double bspline2(const double x);
 /*
  * Function that evaluates the BSpline 3 kernel.
  */
-double bspline_3(const double x);
+double bspline3(const double x);
 /*
  * Function that evaluates the BSpline 4 kernel.
  */
-double bspline_4(const double x);
+double bspline4(const double x);
 
 /*!
  * \brief Function that returns the kernel and the kernel width.
@@ -78,12 +78,12 @@ double bspline_4(const double x);
 inline std::pair<std::function<double(double)>, int>
 getKernelAndWidth(Kernel val)
 {
-    if (val == BSPLINE_2) return std::make_pair(bspline_2, 2);
-    if (val == BSPLINE_3) return std::make_pair(bspline_3, 3);
-    if (val == BSPLINE_4) return std::make_pair(bspline_4, 4);
+    if (val == BSPLINE_2) return std::make_pair(bspline2, 2);
+    if (val == BSPLINE_3) return std::make_pair(bspline3, 3);
+    if (val == BSPLINE_4) return std::make_pair(bspline4, 4);
     TBOX_ERROR("Unknown Kernel\n");
     // We've thrown an error, so just return whatever.
-    return std::make_pair(bspline_2, -1);
+    return std::make_pair(bspline2, -1);
 }
 } // namespace IBAMR
 
