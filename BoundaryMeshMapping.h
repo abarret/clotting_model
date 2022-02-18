@@ -99,11 +99,13 @@ public:
     /*!
      * \brief Initialize the equations systems. Note all systems should be registered with the Equation systems prior to
      * this call. This function also initialized the location of the boundary mesh.
+     *
+     * Important: The volumetric FEDataManager should be initialized BEFORE this function is called.
      */
     virtual void initializeEquationSystems();
 
     /*!
-     * \brief Set the initial conditions of the structure. The position is set to the initial position of the mesh.
+     * \brief Set the initial number of wall sites.
      */
     virtual void setInitialConditions();
 

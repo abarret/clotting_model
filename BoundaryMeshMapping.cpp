@@ -105,6 +105,10 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
         }
         else
         {
+            auto& X_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_coords_sys_name);
+            for (unsigned int d = 0; d < NDIM; ++d) X_sys.add_variable("X_" + std::to_string(d), FEType());
+            auto& dX_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_disp_sys_name);
+            for (unsigned int d = 0; d < NDIM; ++d) dX_sys.add_variable("dX_" + std::to_string(d), FEType());
             auto& W_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_W_sys_name);
             W_sys.add_variable("W", FEType());
             W_sys.assemble_before_solve = false;
@@ -118,13 +122,11 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
 void
 BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t_end, const bool initial_time)
 {
+    plog << "Updating boundary location\n";
+    for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part) updateBoundaryLocation(t_start, t_end, part);
     if (initial_time)
     {
         setInitialConditions();
-    }
-    else
-    {
-        for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part) updateBoundaryLocation(t_start, t_end, part);
     }
     return;
 }
@@ -132,6 +134,7 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t
 void
 BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t_end, const unsigned int part)
 {
+    // Move the boundary mesh to match the volume mesh.
     FEDataManager* fe_data_manager = d_vol_data_managers[part];
     EquationSystems* eq_sys = fe_data_manager->getEquationSystems();
 
@@ -176,43 +179,35 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t
     dX_bdry_vec->close();
     X_bdry_sys.update();
     dX_bdry_sys.update();
+
+    // We should update the fe_data_manager's elem-patch map
+    d_bdry_data_managers[part]->reinitElementMappings();
     return;
 }
 
 void
 BoundaryMeshMapping::setInitialConditions()
 {
+    plog << "Setting initial conditions\n";
     for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
     {
         // Boundary moves according to what's in the velocity systems
         EquationSystems* eq_sys = d_bdry_eq_sys_vec[part].get();
-
-        auto& X_sys = eq_sys->get_system(d_coords_sys_name);
-        const DofMap& X_dof_map = X_sys.get_dof_map();
-        NumericVector<double>* X_vec = X_sys.solution.get();
-        auto& dX_sys = eq_sys->get_system(d_disp_sys_name);
-        const DofMap& dX_dof_map = dX_sys.get_dof_map();
-        NumericVector<double>* dX_vec = dX_sys.solution.get();
-
+        auto& W_sys = eq_sys->get_system(d_W_sys_name);
+        const DofMap& W_dof_map = W_sys.get_dof_map();
+        NumericVector<double>* W_vec = W_sys.solution.get();
         // Loop over nodes
         auto it = d_bdry_meshes[part]->local_nodes_begin();
         const auto it_end = d_bdry_meshes[part]->local_nodes_end();
         for (; it != it_end; ++it)
         {
             const Node* const node = *it;
-            std::vector<dof_id_type> X_dofs, dX_dofs;
-            X_dof_map.dof_indices(node, X_dofs);
-            dX_dof_map.dof_indices(node, dX_dofs);
-            for (int d = 0; d < NDIM; ++d)
-            {
-                X_vec->set(X_dofs[d], (*node)(d));
-                dX_vec->set(dX_dofs[d], 0.0);
-            }
+            std::vector<dof_id_type> W_dofs;
+            W_dof_map.dof_indices(node, W_dofs);
+            for (int d = 0; d < NDIM; ++d) W_vec->set(W_dofs[d], 1.0);
         }
-        X_vec->close();
-        dX_vec->close();
-        X_sys.update();
-        dX_sys.update();
+        W_vec->close();
+        W_sys.update();
     }
 }
 
@@ -244,12 +239,27 @@ BoundaryMeshMapping::initializeEquationSystems()
 void
 BoundaryMeshMapping::spreadWallSites(const int w_idx)
 {
+    plog << "Spreading wall sites to the fluid.\n";
+    // First zero out w_idx.
+    // TODO: Should we always zero out w_idx? Maybe include an option
+    for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
+        for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+        {
+            Pointer<Patch<NDIM>> patch = level->getPatch(p());
+            Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(w_idx);
+            w_data->fillAll(0.0);
+        }
+    }
+
+    // Now spread W_vec to w_idx.
     for (const auto& bdry_data_manager : d_bdry_data_managers)
     {
         EquationSystems* eq_sys = bdry_data_manager->getEquationSystems();
-        std::unique_ptr<NumericVector<double>> W_vec = bdry_data_manager->buildIBGhostedVector(d_W_sys_name);
-        std::unique_ptr<NumericVector<double>> X_vec =
-            bdry_data_manager->buildIBGhostedVector(bdry_data_manager->COORDINATES_SYSTEM_NAME);
+        NumericVector<double>* W_vec = bdry_data_manager->buildGhostedSolutionVector(d_W_sys_name);
+        NumericVector<double>* X_vec =
+            bdry_data_manager->buildGhostedSolutionVector(bdry_data_manager->COORDINATES_SYSTEM_NAME);
         bdry_data_manager->spread(w_idx, *W_vec, *X_vec, d_W_sys_name);
     }
 }
