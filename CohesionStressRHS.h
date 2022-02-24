@@ -115,11 +115,6 @@ public:
         d_phi_u_idx = phi_u_idx;
     }
 
-    inline void setWccIdx(const int w_cc_idx)
-    {
-        d_W_cc_idx = w_cc_idx;
-    }
-
     inline void setOmegaIdx(const int w_idx)
     {
         d_w_idx = w_idx;
@@ -137,7 +132,7 @@ public:
 
 private:
     int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index,
-        d_phi_u_idx = IBTK::invalid_index, d_W_cc_idx = IBTK::invalid_index;
+        d_phi_u_idx = IBTK::invalid_index;
     double d_c4 = std::numeric_limits<double>::quiet_NaN();
     double d_a0 = std::numeric_limits<double>::quiet_NaN();
     double d_a0w = std::numeric_limits<double>::quiet_NaN();
