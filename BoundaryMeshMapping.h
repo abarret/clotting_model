@@ -41,7 +41,7 @@ public:
     /*!
      * \brief Default deconstructor.
      */
-    virtual ~BoundaryMeshMapping() = default;
+    virtual ~BoundaryMeshMapping();
 
     /*!
      * \brief Default constructor.
@@ -120,6 +120,15 @@ public:
      */
     void spreadWallSites(int w_idx);
 
+    /*!
+     * \brief Return the patch index containing the wall sites. The Eulerian description of the wall sites are updated
+     * automatically when the boundary mesh moves.
+     */
+    inline int getWallSitesPatchIndex()
+    {
+        return d_w_idx;
+    }
+
 protected:
     std::string d_object_name;
     SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> d_hierarchy;
@@ -139,6 +148,10 @@ protected:
     std::string d_libmesh_restart_file_extension = "xdr";
 
     SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> d_input_db;
+
+    // We also maintain an Eulerian description of the wall sites
+    SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_w_var;
+    int d_w_idx;
 
 private:
     void commonConstructor(SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,

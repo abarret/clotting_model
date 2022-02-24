@@ -52,6 +52,10 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
                                        std::string restart_read_dirname,
                                        unsigned int restart_restore_number)
 {
+    d_w_var = new CellVariable<NDIM, double>(d_object_name + "::w_var");
+    auto var_db = VariableDatabase<NDIM>::getDatabase();
+    d_w_idx = var_db->registerVariableAndContext(d_w_var, var_db->getContext(d_object_name + "::ctx"), /*ghosts*/ 4);
+
     const bool from_restart = RestartManager::getManager()->isFromRestart();
     unsigned int num_parts = d_vol_meshes.size();
     d_bdry_meshes.resize(num_parts);
@@ -119,6 +123,16 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
     return;
 }
 
+BoundaryMeshMapping::~BoundaryMeshMapping()
+{
+    // Deallocate the wall sites
+    for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
+        if (level->checkAllocated(d_w_idx)) level->deallocatePatchData(d_w_idx);
+    }
+}
+
 void
 BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t_end, const bool initial_time)
 {
@@ -182,6 +196,14 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t
 
     // We should update the fe_data_manager's elem-patch map
     d_bdry_data_managers[part]->reinitElementMappings();
+
+    // Spread the wall sites to the Eulerian grid
+    for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
+        if (!level->checkAllocated(d_w_idx)) level->allocatePatchData(d_w_idx, 0.0);
+    }
+    spreadWallSites(d_w_idx);
     return;
 }
 
@@ -256,7 +278,6 @@ BoundaryMeshMapping::spreadWallSites(const int w_idx)
     // Now spread W_vec to w_idx.
     for (const auto& bdry_data_manager : d_bdry_data_managers)
     {
-        EquationSystems* eq_sys = bdry_data_manager->getEquationSystems();
         NumericVector<double>* W_vec = bdry_data_manager->buildGhostedSolutionVector(d_W_sys_name);
         NumericVector<double>* X_vec =
             bdry_data_manager->buildGhostedSolutionVector(bdry_data_manager->COORDINATES_SYSTEM_NAME);
