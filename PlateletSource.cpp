@@ -26,12 +26,10 @@
 
 PlateletSource::PlateletSource(Pointer<Variable<NDIM>> phi_u_var,
                                Pointer<Variable<NDIM>> phi_a_var,
-                               Pointer<Variable<NDIM>> w_var,
                                Pointer<Database> input_db,
                                Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
     : d_phi_u_var(phi_u_var),
       d_phi_a_var(phi_a_var),
-      d_w_var(w_var),
       d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // These need to be changed to the relevant parameters
@@ -59,7 +57,7 @@ PlateletSource::setDataOnPatchHierarchy(const int data_idx,
                                         const int finest_ln_in)
 {
     // Loop over variables.
-    std::array<Pointer<Variable<NDIM>>, 3> vars = { d_phi_u_var, d_w_var, d_phi_a_var };
+    std::array<Pointer<Variable<NDIM>>, 2> vars = { d_phi_u_var, d_phi_a_var };
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto local_var : vars)
     {
@@ -156,7 +154,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> phi_u_data =
         patch->getPatchData(d_phi_u_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> w_data =
-        patch->getPatchData(d_w_var, d_adv_diff_hier_integrator->getScratchContext());
+        patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
     auto psi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)

@@ -32,7 +32,6 @@ public:
      */
     PlateletSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                   SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> w_var,
                    SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
 
@@ -87,6 +86,11 @@ public:
         d_sign = (positive) ? 1.0 : -1.0;
     }
 
+    inline void setWIdx(const int w_idx)
+    {
+        d_w_idx = w_idx;
+    }
+
 private:
     PlateletSource() = delete;
     double d_Kua = std::numeric_limits<double>::quiet_NaN();
@@ -99,7 +103,8 @@ private:
 
     PlateletSource& operator=(const PlateletSource& that) = delete;
 
-    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_w_var;
+    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var;
+    int d_w_idx = IBTK::invalid_index;
     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
 };
 } // namespace IBAMR
