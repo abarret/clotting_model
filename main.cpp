@@ -54,9 +54,9 @@
 #include <math.h>
 
 // Local Headers
+#include "BoundaryMeshMapping.h"
 #include "CohesionStressRHS.h"
 #include "PlateletSource.h"
-#include "BoundaryMeshMapping.h"
 
 // Function prototypes
 void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
@@ -381,7 +381,8 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_u_src_var = new CellVariable<NDIM, double>("phi_u_src");
         adv_diff_integrator->setAdvectionVelocity(phi_u_var, ins_integrator->getAdvectionVelocityVariable());
         adv_diff_integrator->setDiffusionCoefficient(phi_u_var, input_db->getDouble("UNACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_u_src_fcn = new PlateletSource(phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
+        Pointer<PlateletSource> phi_u_src_fcn = new PlateletSource(
+            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
         phi_u_src_fcn->setSign(false);
         phi_u_src_fcn->setKernel(BSPLINE_3);
         adv_diff_integrator->registerSourceTerm(phi_u_src_var);
@@ -393,7 +394,8 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
         adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
         adv_diff_integrator->setDiffusionCoefficient(phi_a_var, input_db->getDouble("ACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_a_src_fcn = new PlateletSource(phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
+        Pointer<PlateletSource> phi_a_src_fcn = new PlateletSource(
+            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
         phi_a_src_fcn->setSign(true);
         phi_a_src_fcn->setKernel(BSPLINE_3);
         adv_diff_integrator->registerSourceTerm(phi_a_src_var);
@@ -407,14 +409,21 @@ main(int argc, char* argv[])
         adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
 
         // Wall sites
-        BoundaryMeshMapping bdry_mesh_mapping("BoundaryMesh", app_initializer->getComponentDatabase("BoundaryMesh"), &mesh, ib_method_ops->getFEDataManager());
+        BoundaryMeshMapping bdry_mesh_mapping("BoundaryMesh",
+                                              app_initializer->getComponentDatabase("BoundaryMesh"),
+                                              &mesh,
+                                              ib_method_ops->getFEDataManager());
         const int w_idx = bdry_mesh_mapping.getWallSitesPatchIndex();
-        auto update_bdry_mesh = [](const double current_time, const double new_time, bool /*skip_synchronize_new_state_data*/, int /*num_cycles*/, void* ctx)
-        {
+        auto update_bdry_mesh = [](const double current_time,
+                                   const double new_time,
+                                   bool /*skip_synchronize_new_state_data*/,
+                                   int /*num_cycles*/,
+                                   void* ctx) {
             auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
             bdry_mesh_mapping->updateBoundaryLocation(current_time, new_time, false);
         };
-        time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh, static_cast<void*>(&bdry_mesh_mapping));
+        time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
+                                                                       static_cast<void*>(&bdry_mesh_mapping));
 
         EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
@@ -430,7 +439,7 @@ main(int argc, char* argv[])
             const int phi_a_idx =
                 var_db->mapVariableAndContextToIndex(phi_a_var, adv_diff_integrator->getCurrentContext());
             const int phi_u_idx =
-                    var_db->mapVariableAndContextToIndex(phi_u_var, adv_diff_integrator->getCurrentContext());
+                var_db->mapVariableAndContextToIndex(phi_u_var, adv_diff_integrator->getCurrentContext());
             const int z_idx = var_db->mapVariableAndContextToIndex(bond_var, adv_diff_integrator->getCurrentContext());
             cohesion_relax->setZIdx(z_idx);
             cohesion_relax->setPlateletAIdx(phi_a_idx);

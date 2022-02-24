@@ -153,8 +153,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
         patch->getPatchData(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_u_data =
         patch->getPatchData(d_phi_u_var, d_adv_diff_hier_integrator->getScratchContext());
-    Pointer<CellData<NDIM, double>> w_data =
-        patch->getPatchData(d_w_idx);
+    Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
     auto psi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
