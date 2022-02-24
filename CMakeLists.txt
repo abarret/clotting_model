@@ -5,6 +5,7 @@ FIND_PACKAGE(IBAMR REQUIRED)
 
 SET(CXX_SRC
     ActivatedPlateletSource.cpp
+    BoundaryMeshMapping.cpp
     CohesionStressRHS.cpp
     utility_functions.cpp
     )
@@ -12,3 +13,5 @@ ADD_EXECUTABLE(main2d main.cpp)
 TARGET_SOURCES(main2d PRIVATE ${CXX_SRC})
 TARGET_LINK_LIBRARIES(main2d IBAMR::IBAMR2d)
 CONFIGURE_FILE(input2d ${CMAKE_CURRENT_BINARY_DIR}/input2d COPYONLY)
+
+ADD_SUBDIRECTORY(tests)
