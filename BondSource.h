@@ -65,16 +65,29 @@ namespace IBAMR
                             const bool initial_time = false,
                             SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> patch_level =
                             SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>>(NULL)) override;
+
+        void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
+
+        inline void setWIdx(const int w_idx)
+        {
+            d_w_idx = w_idx;
+        }
         private:
         // INPUT DB VARS (I assume eq. 8-10 in new model correspond to bond source)
         double d_a0 = std::numeric_limits<double>::quiet_NaN();
         double d_a0w = std::numeric_limits<double>::quiet_NaN();
         double d_w_mx = std::numeric_limits<double>::quiet_NaN();
 
+        // wall index
+        int d_w_idx = IBTK::invalid_index;
+
+        // Beta function pointer
+        std::function<double(double)> d_beta_fcn;
+
         // OTHER THINGS
         BondSource(const BondSource& from) = delete;
         BondSource& operator=(const BondSource& that) = delete;
-        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_w_var;
+        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var, d_sig_var;
         SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
     }
 }

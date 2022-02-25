@@ -54,7 +54,7 @@ void BondSource::setDataOnPatchHierarchy(const int data_idx,
 {
     // This implementation atm is identical to ActivatePlatelet Source
     // Loop over variables.
-    std::array<Pointer<Variable<NDIM>>, 3> vars = { d_phi_u_var, d_w_var, d_phi_a_var };
+    std::array<Pointer<Variable<NDIM>>, 4> vars = { d_phi_u_var, d_z_var, d_phi_a_var, d_sig_var };
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto local_var : vars)
     {
@@ -138,8 +138,8 @@ void BondSource::setDataOnPatch(const int data_idx,
                                         const bool initial_time,
                                         Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
-    // Calling this "Alpha data" because I believe the goal for this method is to compute alpha (10)
-    Pointer<CellData<NDIM, double>> Alpha_data = patch->getPatchData(data_idx);
+    // Computes alpha - beta * z
+    Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(data_idx);
     Alpha_data->fillAll(0.0);
     if (initial_time) return;
     // grab cell data for variables
@@ -147,8 +147,12 @@ void BondSource::setDataOnPatch(const int data_idx,
         patch->getPatchData(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_u_data =
         patch->getPatchData(d_phi_u_var, d_adv_diff_hier_integrator->getScratchContext());
-    Pointer<CellData<NDIM, double>> w_data =
-        patch->getPatchData(d_w_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> z_data =
+        patch->getPatchData(d_z_var, d_adv_diff_hier_integrator->getScratchContext());
+    // stress tensor and wall sites
+    Pointer<CellData<NDIM, double>> sig_data =
+        patch->getPatchData(d_sig_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
     // begin cell loop
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
@@ -159,7 +163,20 @@ void BondSource::setDataOnPatch(const int data_idx,
         double phi_u = (*phi_u_data)(idx);
         double phi_u = (*phi_u_data)(idx);
         double w = (*w_data)(idx);
+        double z = (*z_data)(idx);
         // Compute alpha data
-        (*Alpha_data)(idx) = (d_a0 * phi_a * phi_a) + (d_a0w * (d_w_mx - w) * phi_u);
+        double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * (d_w_mx - w) * phi_u);
+        double beta = 0.0;
+        #if (NDIM == 2)
+            const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1);
+            const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
+            double beta = d_beta_fcn(y_brackets);
+        #endif
+        #if (NDIM == 3)
+            const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1) + (*sig_data)(idx, 2);
+            const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
+            double beta = d_beta_fcn(y_brackets);
+        #endif
+        (*bond_data)(idx) = alpha - beta * z
     }
 } // setDataOnPatch
