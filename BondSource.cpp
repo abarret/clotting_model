@@ -140,7 +140,7 @@ void BondSource::setDataOnPatch(const int data_idx,
 {
     // Computes alpha - beta * z
     Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(data_idx);
-    Alpha_data->fillAll(0.0);
+    bond_data->fillAll(0.0);
     if (initial_time) return;
     // grab cell data for variables
     Pointer<CellData<NDIM, double>> phi_a_data =
