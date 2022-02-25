@@ -13,7 +13,7 @@ include $(IBAMR_BUILD_DIR)/config/make.inc
 ## main driver is in main.cpp
 ##
 ## PDIM = 2 implies two spatial dimensions
-OBJS = ActivatedPlateletSource.o CohesionStressRHS.o utility_functions.o
+OBJS = BondSource.o ActivatedPlateletSource.o CohesionStressRHS.o utility_functions.o
 #main.o
 PDIM = 2
 
