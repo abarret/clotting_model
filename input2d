@@ -17,18 +17,32 @@ NFINEST = (REF_RATIO^(MAX_LEVELS - 1))*NX  // effective number of grid cells on 
 DX = LX / NFINEST
 
 // Complex Fluid parameters
-FLUID_MODEL = "OLDROYDB"
+FLUID_MODEL = "USER_DEFINED"
 EVOLVE_TYPE = "STANDARD"
 LOG_DETERMINANT     = TRUE
 CONVECTIVE_OPERATOR_TYPE     = "WAVE_PROP"
 OUTPUT_CONFORMATION_TENSOR = TRUE
 OUTPUT_STRESS_TENSOR = FALSE
-RELAXATION_TIME = 0.1
-VISCOSITY = 0.0
+RELAXATION_TIME = 1.0 // Only used to compute force from stress tensor
+VISCOSITY = 1.0       // Only used to compute force from stress tensor
 USING_EXACT_U = FALSE
 BDRY_INTERP_TYPE = "LINEAR"
 RADIUS = 1.0
 P_INLET = 12.5
+
+// Model parameters
+UNACTIVATED_DIFFUSION_COEF = 1.0e-7
+ACTIVATED_DIFFUSION_COEF = 1.0e-7
+C4 = 4.0
+A0 = 0.6
+A0W = 0.6
+BETA_0 = 0.05
+BETA_1 = 1.0
+R_0 = 1.0
+KUA = 0.6 / 12.0
+KUW = 0.6 / 12.0
+WMAX = 1.0
+PL_U_IN = 1.0
 
 // solver parameters
 NORMALIZE_VELOCITY = FALSE
@@ -82,24 +96,66 @@ ERROR_ON_MOVE = TRUE
 MFAC = 1.0
 ELEM_TYPE = "TRI3"
 
+UnactivatedPlatelets
+{
+  Kua = KUA
+  Kuw = KUW
+  wmax = WMAX
+}
 
-phi_n_D = 0.01
-phi_a_D = 0.0
-c_D = 0.01
+ActivatedPlatelets
+{
+  Kua = KUA
+  Kuw = KUW
+  wmax = WMAX
+}
 
 CohesionRHS {
- a2 = 1.0
+  c4 = C4
+  a0 = A0
+  a0w = A0W
+  wmax = WMAX
+}
+
+ActivatedPlateletBcs
+{
+  acoef_function_0 = "1.0"
+  acoef_function_1 = "0.0"
+  acoef_function_2 = "0.0"
+  acoef_function_3 = "0.0"
+  
+  bcoef_function_0 = "0.0"
+  bcoef_function_1 = "1.0"
+  bcoef_function_2 = "1.0"
+  bcoef_function_3 = "1.0"
+  
+  gcoef_function_0 = "0.0"
+  gcoef_function_1 = "0.0"
+  gcoef_function_2 = "0.0"
+  gcoef_function_3 = "0.0"
+}
+
+UnactivatedPlateletBcs
+{
+  pl_in = PL_U_IN
+  acoef_function_0 = "1.0"
+  acoef_function_1 = "0.0"
+  acoef_function_2 = "0.0"
+  acoef_function_3 = "0.0"
+
+  bcoef_function_0 = "0.0"
+  bcoef_function_1 = "1.0"
+  bcoef_function_2 = "1.0"
+  bcoef_function_3 = "1.0"
+
+  gcoef_function_0 = "pl_in"
+  gcoef_function_1 = "0.0"
+  gcoef_function_2 = "0.0"
+  gcoef_function_3 = "0.0"
 }
 
 CohesionStress {
 InitialConditions{
- t_half = 0.5
- tau = 0.125
- lambda = RELAXATION_TIME
- Pgrad = 1.0
- mu = MU
- mu_p = VISCOSITY
-
  function_0 = "1.0"
  function_1 = "1.0"
  function_2 = "0.0"
@@ -164,7 +220,6 @@ interp_type = BDRY_INTERP_TYPE
 }
 
 VelocityInitialConditions {
-
    function_0 = "0.0"
    function_1 = "0.0"
 }
