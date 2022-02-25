@@ -180,3 +180,9 @@ void BondSource::setDataOnPatch(const int data_idx,
         (*bond_data)(idx) = alpha - beta * z
     }
 } // setDataOnPatch
+
+void BondSource::registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta)
+{
+    // We set beta here
+    d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
+} // registerBetaFcn
