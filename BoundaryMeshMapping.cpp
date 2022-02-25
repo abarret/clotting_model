@@ -10,6 +10,7 @@
 
 #include "libmesh/enum_xdr_mode.h"
 #include "libmesh/explicit_system.h"
+#include <libmesh/boundary_info.h>
 
 namespace IBAMR
 {
