@@ -25,12 +25,14 @@
 
 BondSource::BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
                     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> w_var,
+                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
+                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
                     SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
     : d_phi_u_var(phi_u_var),
       d_phi_a_var(phi_a_var),
-      d_w_var(w_var),
+      d_z_var(z_var), 
+      d_sig_var(sig_var),
       d_adv_diff_hier_integrator(adv_diff_hier_integrator) 
 {
     // init db vars
