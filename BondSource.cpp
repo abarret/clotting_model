@@ -168,7 +168,6 @@ void BondSource::setDataOnPatch(const int data_idx,
         double z = (*z_data)(idx);
         // Compute alpha data
         double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * (d_w_mx - w) * phi_u);
-        double beta = 0.0;
         #if (NDIM == 2)
             const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1);
             const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
