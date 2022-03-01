@@ -54,6 +54,7 @@
 #include <math.h>
 
 // Local Headers
+#include "BondSource.h"
 #include "BoundaryMeshMapping.h"
 #include "CohesionStressRHS.h"
 #include "PlateletSource.h"
@@ -378,6 +379,7 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_u_var = new CellVariable<NDIM, double>("phi_u");
         Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
         Pointer<CellVariable<NDIM, double>> bond_var = new CellVariable<NDIM, double>("bond");
+        Pointer<CellVariable<NDIM, double>> sig_var = cohesionStressForcing->getVariable();
 
         // Unactivated
         adv_diff_integrator->registerTransportedQuantity(phi_u_var);
@@ -410,6 +412,16 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
         adv_diff_integrator->setAdvectionVelocity(bond_var, ins_integrator->getAdvectionVelocityVariable());
         adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
+        Pointer<BondSource> bond_src_fcn = new BondSource(phi_u_var,
+                                                          phi_a_var,
+                                                          bond_var,
+                                                          sig_var,
+                                                          app_initializer->getComponentDatabase("BondVariable"),
+                                                          adv_diff_integrator);
+        bond_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
+        adv_diff_integrator->registerSourceTerm(bond_src_var);
+        adv_diff_integrator->setSourceTermFunction(bond_src_var, bond_src_fcn);
+        adv_diff_integrator->setSourceTerm(bond_var, bond_src_var);
 
         // Wall sites
         BoundaryMeshMapping bdry_mesh_mapping("BoundaryMesh",
@@ -450,6 +462,7 @@ main(int argc, char* argv[])
             cohesion_relax->setOmegaIdx(w_idx);
             phi_u_src_fcn->setWIdx(w_idx);
             phi_a_src_fcn->setWIdx(w_idx);
+            bond_src_fcn->setWIdx(w_idx);
         }
 
         // Deallocate initialization objects.
