@@ -368,7 +368,10 @@ main(int argc, char* argv[])
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
         // TODO: Set up betaFcn correctly
         // eps0 = (3*a2) / a0
-        BetaFcn betaFcn(0.0, 0.0, 0.0);
+        double beta_0 = input_db->getDouble("BETA_0");
+        double beta_1 = input_db->getDouble("BETA_1");
+        double r_0 = input_db->getDouble("R_0");
+        BetaFcn betaFcn(r_0, beta_0, beta_1);
         cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
 
         // Set up platelet concentrations and bond information
