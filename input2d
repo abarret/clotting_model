@@ -110,11 +110,21 @@ ActivatedPlatelets
   wmax = WMAX
 }
 
+BondVariable {
+  a0 = A0
+  a0w = A0W
+  wmax = WMAX
+}
+
 CohesionRHS {
   c4 = C4
   a0 = A0
   a0w = A0W
   wmax = WMAX
+}
+
+BoundaryMesh {
+
 }
 
 ActivatedPlateletBcs
@@ -149,6 +159,24 @@ UnactivatedPlateletBcs
   bcoef_function_3 = "1.0"
 
   gcoef_function_0 = "pl_in"
+  gcoef_function_1 = "0.0"
+  gcoef_function_2 = "0.0"
+  gcoef_function_3 = "0.0"
+}
+
+BondVariableBcs
+{
+  acoef_function_0 = "0.0"
+  acoef_function_1 = "0.0"
+  acoef_function_2 = "0.0"
+  acoef_function_3 = "0.0"
+
+  bcoef_function_0 = "1.0"
+  bcoef_function_1 = "1.0"
+  bcoef_function_2 = "1.0"
+  bcoef_function_3 = "1.0"
+
+  gcoef_function_0 = "0.0"
   gcoef_function_1 = "0.0"
   gcoef_function_2 = "0.0"
   gcoef_function_3 = "0.0"

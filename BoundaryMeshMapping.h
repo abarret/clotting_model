@@ -118,7 +118,7 @@ public:
      * \brief Spread the number of used wall sites. The provided patch index must have enough ghost cell width to
      * perform the requested spreading operation.
      */
-    void spreadWallSites(int w_idx);
+    void spreadWallSites(int w_idx = IBTK::invalid_index);
 
     /*!
      * \brief Return the patch index containing the wall sites. The Eulerian description of the wall sites are updated

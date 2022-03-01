@@ -57,7 +57,6 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> phi_u_data = patch->getPatchData(d_phi_u_idx);
     Pointer<CellData<NDIM, double>> z_data = patch->getPatchData(d_z_idx);
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
-    auto phi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     ret_data->fillAll(0.0);
     if (initial_time) return;
     for (CellIterator<NDIM> i(patch_box); i; i++)
@@ -74,8 +73,6 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
         double phi_u = (*phi_u_data)(idx);
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
-        // const double eta_b = IBAMR::convolution(d_n_b_mx, phi_b, -2.0, z_data, phi_fcn.first, phi_fcn.second, idx,
-        // dx);
         // Compute the source terms
         const double R2 = d_a0 * phi_a * phi_a;
         const double R4 = d_a0w * (d_w_mx - w) * phi_u;

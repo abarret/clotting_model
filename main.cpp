@@ -367,8 +367,7 @@ main(int argc, char* argv[])
         Pointer<CohesionStressRHS> cohesion_relax =
             new CohesionStressRHS("CohesionRHS", app_initializer->getComponentDatabase("CohesionRHS"));
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
-        // TODO: Set up betaFcn correctly
-        // eps0 = (3*a2) / a0
+
         double beta_0 = input_db->getDouble("BETA_0");
         double beta_1 = input_db->getDouble("BETA_1");
         double r_0 = input_db->getDouble("R_0");
@@ -424,10 +423,9 @@ main(int argc, char* argv[])
         adv_diff_integrator->setSourceTerm(bond_var, bond_src_var);
 
         // Wall sites
-        BoundaryMeshMapping bdry_mesh_mapping("BoundaryMesh",
-                                              app_initializer->getComponentDatabase("BoundaryMesh"),
-                                              &mesh,
-                                              ib_method_ops->getFEDataManager());
+        FEDataManager* vol_data_manager = ib_method_ops->getFEDataManager();
+        BoundaryMeshMapping bdry_mesh_mapping(
+            "BoundaryMesh", app_initializer->getComponentDatabase("BoundaryMesh"), &mesh, vol_data_manager);
         const int w_idx = bdry_mesh_mapping.getWallSitesPatchIndex();
         auto update_bdry_mesh = [](const double current_time,
                                    const double new_time,
@@ -437,16 +435,24 @@ main(int argc, char* argv[])
             auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
             bdry_mesh_mapping->updateBoundaryLocation(current_time, new_time, false);
         };
+        auto regrid_callback = [](SAMRAI::tbox::Pointer<SAMRAI::hier::BasePatchHierarchy<NDIM>> /*hierarchy*/,
+                                  const double /*time*/,
+                                  const bool /*initial_time*/,
+                                  void* ctx) {
+            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
+            bdry_mesh_mapping->spreadWallSites();
+        };
         time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
                                                                        static_cast<void*>(&bdry_mesh_mapping));
+        time_integrator->registerRegridHierarchyCallback(regrid_callback, static_cast<void*>(&bdry_mesh_mapping));
 
         EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
 
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
-        bdry_mesh_mapping.initializeEquationSystems();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
+        bdry_mesh_mapping.initializeEquationSystems();
 
         // Make sure source terms are set correctly.
         {

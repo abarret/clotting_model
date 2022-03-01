@@ -125,11 +125,6 @@ public:
         d_z_idx = z_idx;
     }
 
-    inline void setKernel(const IBAMR::Kernel kern)
-    {
-        d_kernel = kern;
-    }
-
 private:
     int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index,
         d_phi_u_idx = IBTK::invalid_index;
@@ -137,11 +132,8 @@ private:
     double d_a0 = std::numeric_limits<double>::quiet_NaN();
     double d_a0w = std::numeric_limits<double>::quiet_NaN();
     double d_w_mx = std::numeric_limits<double>::quiet_NaN();
-    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL;
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
-    // phi function point for convolution
-    std::function<double(double)> d_conv_phi_fcn;
 };
 
 } // Namespace IBAMR

@@ -232,6 +232,9 @@ BoundaryMeshMapping::setInitialConditions()
         W_vec->close();
         W_sys.update();
     }
+
+    // Spread wall sites
+    spreadWallSites(d_w_idx);
 }
 
 void
@@ -260,8 +263,15 @@ BoundaryMeshMapping::initializeEquationSystems()
 }
 
 void
-BoundaryMeshMapping::spreadWallSites(const int w_idx)
+BoundaryMeshMapping::spreadWallSites(int w_idx)
 {
+    if (w_idx == IBTK::invalid_index) w_idx = d_w_idx;
+    // Double check that wall sites are allocated
+    for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
+        if (!level->checkAllocated(w_idx)) level->allocatePatchData(w_idx);
+    }
     plog << "Spreading wall sites to the fluid.\n";
     // First zero out w_idx.
     // TODO: Should we always zero out w_idx? Maybe include an option
