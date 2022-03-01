@@ -23,9 +23,9 @@ namespace IBAMR
  * centered at idx and scaled by the grid spacing (i.e. phi(1) evaluates one grid cell away from idx).
  */
 double convolution(double alpha,
-                   const SAMRAI::pdat::CellData<NDIM, double>& a_data,
+                   SAMRAI::pdat::CellData<NDIM, double>* a_data,
                    double beta,
-                   const SAMRAI::pdat::CellData<NDIM, double>& b_data,
+                   SAMRAI::pdat::CellData<NDIM, double>* b_data,
                    std::function<double(double)> phi,
                    unsigned int phi_width,
                    const SAMRAI::pdat::CellIndex<NDIM>& idx,

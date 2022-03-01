@@ -106,6 +106,9 @@ private:
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var;
     int d_w_idx = IBTK::invalid_index;
     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
+
+    // Note we need our own scratch index with larger ghost width to compute the convolution.
+    int d_pl_scr_idx = IBTK::invalid_index;
 };
 } // namespace IBAMR
 //////////////////////////////////////////////////////////////////////////////

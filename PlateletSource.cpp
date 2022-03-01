@@ -38,6 +38,11 @@ PlateletSource::PlateletSource(Pointer<Variable<NDIM>> phi_u_var,
     d_Kuw = input_db->getDouble("Kuw");
     // w constant
     d_w_mx = input_db->getDouble("wmax");
+
+    // scratch index
+    auto var_db = VariableDatabase<NDIM>::getDatabase();
+    d_pl_scr_idx =
+        var_db->registerVariableAndContext(d_phi_a_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     return;
 } // PlateletSource
 
@@ -56,6 +61,8 @@ PlateletSource::setDataOnPatchHierarchy(const int data_idx,
                                         const int coarsest_ln_in,
                                         const int finest_ln_in)
 {
+    const int coarsest_ln = (coarsest_ln_in == -1 ? 0 : coarsest_ln_in);
+    const int finest_ln = (finest_ln_in == -1 ? hierarchy->getFinestLevelNumber() : finest_ln_in);
     // Loop over variables.
     std::array<Pointer<Variable<NDIM>>, 2> vars = { d_phi_u_var, d_phi_a_var };
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
@@ -112,14 +119,39 @@ PlateletSource::setDataOnPatchHierarchy(const int data_idx,
         }
     }
 
+    // Fill in ghost cells for scratch index
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        level->allocatePatchData(d_pl_scr_idx, data_time);
+    }
+    auto var_db = VariableDatabase<NDIM>::getDatabase();
+    int phi_a_scr_idx =
+        var_db->mapVariableAndContextToIndex(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
+    using ITC = HierarchyGhostCellInterpolation::InterpolationTransactionComponent;
+    ITC ghost_fill_comp(d_pl_scr_idx,
+                        phi_a_scr_idx,
+                        "CONSERVATIVE_LINEAR_REFINE",
+                        false,
+                        "CONSERVATIVE_COARSEN",
+                        "LINEAR",
+                        false,
+                        d_adv_diff_hier_integrator->getPhysicalBcCoefs(d_phi_a_var));
+    HierarchyGhostCellInterpolation ghost_fill_op;
+    ghost_fill_op.initializeOperatorState(ghost_fill_comp, hierarchy);
+    ghost_fill_op.fillData(data_time);
+
     // Compute the source function
-    const int coarsest_ln = (coarsest_ln_in == -1 ? 0 : coarsest_ln_in);
-    const int finest_ln = (finest_ln_in == -1 ? hierarchy->getFinestLevelNumber() : finest_ln_in);
     for (int level_num = coarsest_ln; level_num <= finest_ln; ++level_num)
     {
         setDataOnPatchLevel(data_idx, var, hierarchy->getPatchLevel(level_num), data_time, initial_time);
     }
 
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        level->deallocatePatchData(d_pl_scr_idx);
+    }
     // Deallocate scratch data when needed.
     for (const auto& local_var : vars)
     {
@@ -149,8 +181,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
     const double* const dx = pgeom->getDx();
     // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates
     // to **)
-    Pointer<CellData<NDIM, double>> phi_a_data =
-        patch->getPatchData(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> phi_a_data = patch->getPatchData(d_pl_scr_idx);
     Pointer<CellData<NDIM, double>> phi_u_data =
         patch->getPatchData(d_phi_u_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
@@ -165,7 +196,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
         double w = (*w_data)(idx);
         // convolve phi_a*psi
         // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object.
-        const double eta_a = convolution(1.0, *phi_a_data, 0.0, *w_data, psi_fcn.first, psi_fcn.second, idx, dx);
+        const double eta_a = convolution(1.0, phi_a_data, 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx);
         // Compute the f^a_u
         (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * (d_w_mx - w) * phi_u); // include f^a_u?
     }
