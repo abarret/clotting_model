@@ -5,6 +5,7 @@ FIND_PACKAGE(IBAMR REQUIRED)
 
 SET(CXX_SRC
     ActivatedPlateletSource.cpp
+    BondSource.cpp
     BoundaryMeshMapping.cpp
     CohesionStressRHS.cpp
     utility_functions.cpp
