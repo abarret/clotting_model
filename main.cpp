@@ -392,6 +392,12 @@ main(int argc, char* argv[])
         adv_diff_integrator->registerSourceTerm(phi_u_src_var);
         adv_diff_integrator->setSourceTermFunction(phi_u_src_var, phi_u_src_fcn);
         adv_diff_integrator->setSourceTerm(phi_u_var, phi_u_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> phi_u_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            phi_u_bcs = new muParserRobinBcCoefs("UnactivatedPlateletsBcs",
+                                                 app_initializer->getComponentDatabase("UnactivatedPlateletBcs"),
+                                                 grid_geometry);
+        adv_diff_integrator->setPhysicalBcCoef(phi_u_var, phi_u_bcs.getPointer());
 
         // Activated
         adv_diff_integrator->registerTransportedQuantity(phi_a_var);
@@ -405,6 +411,11 @@ main(int argc, char* argv[])
         adv_diff_integrator->registerSourceTerm(phi_a_src_var);
         adv_diff_integrator->setSourceTermFunction(phi_a_src_var, phi_a_src_fcn);
         adv_diff_integrator->setSourceTerm(phi_a_var, phi_a_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> phi_a_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            phi_a_bcs = new muParserRobinBcCoefs(
+                "ActivatedPlateletsBcs", app_initializer->getComponentDatabase("ActivatedPlateletBcs"), grid_geometry);
+        adv_diff_integrator->setPhysicalBcCoef(phi_a_var, phi_a_bcs.getPointer());
 
         // Bonds
         adv_diff_integrator->registerTransportedQuantity(bond_var);
@@ -421,6 +432,11 @@ main(int argc, char* argv[])
         adv_diff_integrator->registerSourceTerm(bond_src_var);
         adv_diff_integrator->setSourceTermFunction(bond_src_var, bond_src_fcn);
         adv_diff_integrator->setSourceTerm(bond_var, bond_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> bond_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            bond_bcs = new muParserRobinBcCoefs(
+                "BondVariableBcs", app_initializer->getComponentDatabase("BondVariableBcs"), grid_geometry);
+        adv_diff_integrator->setPhysicalBcCoef(bond_var, bond_bcs.getPointer());
 
         // Wall sites
         FEDataManager* vol_data_manager = ib_method_ops->getFEDataManager();
@@ -445,6 +461,7 @@ main(int argc, char* argv[])
         time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
                                                                        static_cast<void*>(&bdry_mesh_mapping));
         time_integrator->registerRegridHierarchyCallback(regrid_callback, static_cast<void*>(&bdry_mesh_mapping));
+        visit_data_writer->registerPlotQuantity("wall_sites", "SCALAR", w_idx);
 
         EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);

@@ -184,8 +184,8 @@ BondVariableBcs
 
 CohesionStress {
 InitialConditions{
- function_0 = "1.0"
- function_1 = "1.0"
+ function_0 = "0.0"
+ function_1 = "0.0"
  function_2 = "0.0"
 }
 ExtraStressBoundaryConditions_0 {
