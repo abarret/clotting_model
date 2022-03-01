@@ -163,7 +163,7 @@ void BondSource::setDataOnPatch(const int data_idx,
         const CellIndex<NDIM>& idx = ci();
         // grab the var values w/ the index
         double phi_u = (*phi_u_data)(idx);
-        double phi_u = (*phi_u_data)(idx);
+        double phi_a = (*phi_a_data)(idx);
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
         // Compute alpha data
@@ -178,7 +178,7 @@ void BondSource::setDataOnPatch(const int data_idx,
             const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
             double beta = d_beta_fcn(y_brackets);
         #endif
-        (*bond_data)(idx) = alpha - beta * z
+        (*bond_data)(idx) = alpha - beta * z;
     }
 } // setDataOnPatch
 

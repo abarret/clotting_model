@@ -109,7 +109,7 @@ namespace IBAMR
         BondSource& operator=(const BondSource& that) = delete;
         SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var, d_sig_var;
         SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
-    }
+    };
 }
 
 #endif
