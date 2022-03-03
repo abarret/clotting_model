@@ -51,7 +51,6 @@
 
 #include <fstream>
 #include <iostream>
-#include <math.h>
 
 // Local Headers
 #include "BondSource.h"
@@ -69,14 +68,14 @@ void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
 struct BetaFcn
 {
 public:
-    BetaFcn(const double R0, const double beta_0, const double beta_1)
-        : d_R0(R0), d_beta_0(beta_0), d_beta_1(beta_1)
+    BetaFcn(const double R0, const double beta_0, const double beta_1) : d_R0(R0), d_beta_0(beta_0), d_beta_1(beta_1)
     {
         // intentionally blank
         return;
     }
     double beta(const double eps)
     {
+        return d_beta_0;
         if (eps > d_R0)
         {
             return d_beta_0 * std::exp(d_beta_1 * (eps - d_R0));
@@ -355,6 +354,12 @@ main(int argc, char* argv[])
         {
             time_integrator->registerVisItDataWriter(visit_data_writer);
         }
+
+        // Create advected quantities
+        Pointer<CellVariable<NDIM, double>> phi_u_var = new CellVariable<NDIM, double>("phi_u");
+        Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
+        Pointer<CellVariable<NDIM, double>> bond_var = new CellVariable<NDIM, double>("bond");
+
         // Set up Cohesion stress tensor
         Pointer<CFINSForcing> cohesionStressForcing =
             new CFINSForcing("CohesionStressForcing",
@@ -365,7 +370,12 @@ main(int argc, char* argv[])
                              visit_data_writer);
         ins_integrator->registerBodyForceFunction(cohesionStressForcing);
         Pointer<CohesionStressRHS> cohesion_relax =
-            new CohesionStressRHS("CohesionRHS", app_initializer->getComponentDatabase("CohesionRHS"));
+            new CohesionStressRHS(phi_u_var,
+                                  phi_a_var,
+                                  bond_var,
+                                  "CohesionRHS",
+                                  app_initializer->getComponentDatabase("CohesionRHS"),
+                                  adv_diff_integrator);
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
 
         double beta_0 = input_db->getDouble("BETA_0");
@@ -373,12 +383,8 @@ main(int argc, char* argv[])
         double r_0 = input_db->getDouble("R_0");
         BetaFcn betaFcn(r_0, beta_0, beta_1);
         cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
-
-        // Set up platelet concentrations and bond information
-        Pointer<CellVariable<NDIM, double>> phi_u_var = new CellVariable<NDIM, double>("phi_u");
-        Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
-        Pointer<CellVariable<NDIM, double>> bond_var = new CellVariable<NDIM, double>("bond");
         Pointer<CellVariable<NDIM, double>> sig_var = cohesionStressForcing->getVariable();
+        // Set up platelet concentrations and bond information
 
         // Unactivated
         adv_diff_integrator->registerTransportedQuantity(phi_u_var);
@@ -472,21 +478,10 @@ main(int argc, char* argv[])
         bdry_mesh_mapping.initializeEquationSystems();
 
         // Make sure source terms are set correctly.
-        {
-            auto var_db = VariableDatabase<NDIM>::getDatabase();
-            const int phi_a_idx =
-                var_db->mapVariableAndContextToIndex(phi_a_var, adv_diff_integrator->getCurrentContext());
-            const int phi_u_idx =
-                var_db->mapVariableAndContextToIndex(phi_u_var, adv_diff_integrator->getCurrentContext());
-            const int z_idx = var_db->mapVariableAndContextToIndex(bond_var, adv_diff_integrator->getCurrentContext());
-            cohesion_relax->setZIdx(z_idx);
-            cohesion_relax->setPlateletAIdx(phi_a_idx);
-            cohesion_relax->setPlateletUIdx(phi_u_idx);
-            cohesion_relax->setOmegaIdx(w_idx);
-            phi_u_src_fcn->setWIdx(w_idx);
-            phi_a_src_fcn->setWIdx(w_idx);
-            bond_src_fcn->setWIdx(w_idx);
-        }
+        cohesion_relax->setOmegaIdx(w_idx);
+        phi_u_src_fcn->setWIdx(w_idx);
+        phi_a_src_fcn->setWIdx(w_idx);
+        bond_src_fcn->setWIdx(w_idx);
 
         // Deallocate initialization objects.
         app_initializer.setNull();

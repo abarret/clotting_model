@@ -38,7 +38,6 @@ BondSource::BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u
     // init db vars
     d_a0 = input_db->getDouble("a0");
     d_a0w = input_db->getDouble("a0w");
-    d_w_mx = input_db->getDouble("wmax");
 } // BondSource
 
 bool
@@ -170,15 +169,15 @@ BondSource::setDataOnPatch(const int data_idx,
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
         // Compute alpha data
-        double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * (d_w_mx - w) * phi_u);
+        double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * w * phi_u);
 #if (NDIM == 2)
         const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1);
-        const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
+        const double y_brackets = trace / (z + 1.0e-8);
         double beta = d_beta_fcn(y_brackets);
 #endif
 #if (NDIM == 3)
         const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1) + (*sig_data)(idx, 2);
-        const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
+        const double y_brackets = trace / (z + 1.0e-8);
         double beta = d_beta_fcn(y_brackets);
 #endif
         (*bond_data)(idx) = alpha - beta * z;

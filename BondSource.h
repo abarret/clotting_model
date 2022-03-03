@@ -96,7 +96,6 @@ private:
     // INPUT DB VARS (I assume eq. 8-10 in new model correspond to bond source)
     double d_a0 = std::numeric_limits<double>::quiet_NaN();
     double d_a0w = std::numeric_limits<double>::quiet_NaN();
-    double d_w_mx = std::numeric_limits<double>::quiet_NaN();
 
     // wall index
     int d_w_idx = IBTK::invalid_index;

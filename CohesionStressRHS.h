@@ -57,7 +57,12 @@ public:
     /*!
      * \brief This constructor reads in the parameters for the model from the input database.
      */
-    CohesionStressRHS(const std::string& object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    CohesionStressRHS(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+                      SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+                      SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
+                      const std::string& object_name,
+                      SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+                      SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator);
 
     /*!
      * \brief Default constructor.
@@ -91,6 +96,17 @@ public:
     //\{
 
     /*!
+     * \brief Evaluate the function on the patch interiors on the specified
+     * levels of the patch hierarchy.
+     */
+    void setDataOnPatchHierarchy(const int data_idx,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> hierarchy,
+                                 const double data_time,
+                                 const bool initial_time = false,
+                                 const int coarsest_ln = -1,
+                                 const int finest_ln = -1) override;
+    /*!
      * \brief Evaluate the function on the patch interior.
      */
     void setDataOnPatch(const int data_idx,
@@ -105,35 +121,21 @@ public:
 
     void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
 
-    inline void setPlateletAIdx(const int phi_a_idx)
-    {
-        d_phi_a_idx = phi_a_idx;
-    }
-
-    inline void setPlateletUIdx(const int phi_u_idx)
-    {
-        d_phi_u_idx = phi_u_idx;
-    }
-
     inline void setOmegaIdx(const int w_idx)
     {
         d_w_idx = w_idx;
     }
 
-    inline void setZIdx(const int z_idx)
-    {
-        d_z_idx = z_idx;
-    }
-
 private:
-    int d_phi_a_idx = IBTK::invalid_index, d_z_idx = IBTK::invalid_index, d_w_idx = IBTK::invalid_index,
-        d_phi_u_idx = IBTK::invalid_index;
+    int d_w_idx = IBTK::invalid_index;
     double d_c4 = std::numeric_limits<double>::quiet_NaN();
     double d_a0 = std::numeric_limits<double>::quiet_NaN();
     double d_a0w = std::numeric_limits<double>::quiet_NaN();
-    double d_w_mx = std::numeric_limits<double>::quiet_NaN();
+    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var;
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
+
+    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_integrator;
 };
 
 } // Namespace IBAMR

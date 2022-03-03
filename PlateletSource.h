@@ -95,7 +95,6 @@ private:
     PlateletSource() = delete;
     double d_Kua = std::numeric_limits<double>::quiet_NaN();
     double d_Kuw = std::numeric_limits<double>::quiet_NaN();
-    double d_w_mx = std::numeric_limits<double>::quiet_NaN();
     double d_sign = 1.0;
     Kernel d_kernel = UNKNOWN_KERNEL;
 

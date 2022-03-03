@@ -28,16 +28,12 @@ PlateletSource::PlateletSource(Pointer<Variable<NDIM>> phi_u_var,
                                Pointer<Variable<NDIM>> phi_a_var,
                                Pointer<Database> input_db,
                                Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
-    : d_phi_u_var(phi_u_var),
-      d_phi_a_var(phi_a_var),
-      d_adv_diff_hier_integrator(adv_diff_hier_integrator)
+    : d_phi_u_var(phi_u_var), d_phi_a_var(phi_a_var), d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // These need to be changed to the relevant parameters
     // a0 Constants
     d_Kua = input_db->getDouble("Kua");
     d_Kuw = input_db->getDouble("Kuw");
-    // w constant
-    d_w_mx = input_db->getDouble("wmax");
 
     // scratch index
     auto var_db = VariableDatabase<NDIM>::getDatabase();
@@ -198,7 +194,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
         // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object.
         const double eta_a = convolution(1.0, phi_a_data, 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx);
         // Compute the f^a_u
-        (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * (d_w_mx - w) * phi_u); // include f^a_u?
+        (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * w * phi_u); // include f^a_u?
     }
     return;
 } // setDataOnPatch

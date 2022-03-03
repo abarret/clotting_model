@@ -195,15 +195,6 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t
     X_bdry_sys.update();
     dX_bdry_sys.update();
 
-    // We should update the fe_data_manager's elem-patch map
-    d_bdry_data_managers[part]->reinitElementMappings();
-
-    // Spread the wall sites to the Eulerian grid
-    for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
-    {
-        Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
-        if (!level->checkAllocated(d_w_idx)) level->allocatePatchData(d_w_idx, 0.0);
-    }
     spreadWallSites(d_w_idx);
     return;
 }
@@ -289,6 +280,7 @@ BoundaryMeshMapping::spreadWallSites(int w_idx)
     // Now spread W_vec to w_idx.
     for (const auto& bdry_data_manager : d_bdry_data_managers)
     {
+        bdry_data_manager->reinitElementMappings();
         NumericVector<double>* W_vec = bdry_data_manager->buildGhostedSolutionVector(d_W_sys_name);
         NumericVector<double>* X_vec =
             bdry_data_manager->buildGhostedSolutionVector(bdry_data_manager->COORDINATES_SYSTEM_NAME);
