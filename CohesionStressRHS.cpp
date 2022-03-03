@@ -136,7 +136,7 @@ void
 CohesionStressRHS::setDataOnPatch(const int data_idx,
                                   Pointer<Variable<NDIM>> /*var*/,
                                   Pointer<Patch<NDIM>> patch,
-                                  const double /*data_time*/,
+                                  const double data_time,
                                   const bool initial_time,
                                   Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
@@ -171,7 +171,7 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
         double z = (*z_data)(idx);
         // Compute the source terms
         const double R2 = d_a0 * phi_a * phi_a;
-        const double R4 = d_a0w * w * phi_u;
+        const double R4 = d_a0w * w * phi_a;
         const double alpha = R2 + R4;
 #if (NDIM == 2)
         const double trace = (*in_data)(idx, 0) + (*in_data)(idx, 1);

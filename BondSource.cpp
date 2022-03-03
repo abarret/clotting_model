@@ -169,7 +169,7 @@ BondSource::setDataOnPatch(const int data_idx,
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
         // Compute alpha data
-        double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * w * phi_u);
+        double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * w * phi_a);
 #if (NDIM == 2)
         const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1);
         const double y_brackets = trace / (z + 1.0e-8);

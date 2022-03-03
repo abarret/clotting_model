@@ -218,7 +218,7 @@ BoundaryMeshMapping::setInitialConditions()
             const Node* const node = *it;
             std::vector<dof_id_type> W_dofs;
             W_dof_map.dof_indices(node, W_dofs);
-            for (int d = 0; d < NDIM; ++d) W_vec->set(W_dofs[d], 1.0);
+            W_vec->set(W_dofs[0], 1.0);
         }
         W_vec->close();
         W_sys.update();
