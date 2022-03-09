@@ -75,10 +75,10 @@ public:
     }
     double beta(const double eps)
     {
-        return d_beta_0;
         if (eps > d_R0)
         {
-            return d_beta_0 * std::exp(d_beta_1 * (eps - d_R0));
+            // return d_beta_0 * std::exp(d_beta_1 * (eps - d_R0));
+            return d_beta_0 * (1.0 + d_beta_1 * (eps - d_R0));
         }
         else
         {
