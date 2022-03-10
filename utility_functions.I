@@ -37,7 +37,7 @@ bspline4(double x)
     const double r2 = r * r;
     const double r3 = r2 * r;
     if (x <= 1.0)
-        return (1.0 / 6.0) * (3.0 * r3 - 23.0 * r2 + 60.0 * r - 44.0);
+        return (1.0 / 6.0) * (3.0 * r3 - 24.0 * r2 + 60.0 * r - 44.0);
     else if (x <= 2.0)
         return (1.0 / 6.0) * (-r3 + 12.0 * r2 - 48.0 * r + 64.0);
     else
