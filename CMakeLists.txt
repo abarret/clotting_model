@@ -4,10 +4,10 @@ PROJECT(Clotting LANGUAGES C CXX Fortran)
 FIND_PACKAGE(IBAMR REQUIRED)
 
 SET(CXX_SRC
-    ActivatedPlateletSource.cpp
     BondSource.cpp
     BoundaryMeshMapping.cpp
     CohesionStressRHS.cpp
+    PlateletSource.cpp
     utility_functions.cpp
     )
 ADD_EXECUTABLE(main2d main.cpp)

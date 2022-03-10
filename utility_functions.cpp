@@ -11,9 +11,9 @@ namespace IBAMR
 {
 double
 convolution(double alpha,
-            const CellData<NDIM, double>& a_data,
+            CellData<NDIM, double>* a_data,
             double beta,
-            const CellData<NDIM, double>& b_data,
+            CellData<NDIM, double>* b_data,
             std::function<double(double)> phi,
             unsigned int phi_width,
             const CellIndex<NDIM>& idx,
@@ -24,8 +24,9 @@ convolution(double alpha,
     int_box.grow(phi_width);
 #ifndef NDEBUG
     // Error checking. Need ghost data for patch data.
-    TBOX_ASSERT(a_data.getGhostBox() * int_box == int_box);
-    TBOX_ASSERT(b_data.getGhostBox() * int_box == int_box);
+    TBOX_ASSERT(a_data || b_data);
+    if (a_data) TBOX_ASSERT(a_data->getGhostBox() * int_box == int_box);
+    if (b_data) TBOX_ASSERT(b_data->getGhostBox() * int_box == int_box);
 #endif
     // Now compute convolution
     double convolve = 0.0;
@@ -34,7 +35,10 @@ convolution(double alpha,
         const CellIndex<NDIM>& n_idx = ci();
         double phi_weight = 1.0;
         for (int d = 0; d < NDIM; ++d) phi_weight *= phi(static_cast<double>(n_idx(d) - idx(d))) * dx[d];
-        convolve += (alpha * a_data(n_idx) + beta * b_data(n_idx)) * phi_weight;
+        double val = 0.0;
+        if (a_data) val += alpha * (*a_data)(n_idx);
+        if (b_data) val += beta * (*b_data)(n_idx);
+        convolve += val * phi_weight;
     }
     return convolve;
 }

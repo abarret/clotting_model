@@ -23,9 +23,7 @@ public:
     BoundaryMeshMapping(std::string object_name,
                         SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                         const std::vector<libMesh::MeshBase*>& vol_meshes,
-                        const std::vector<IBTK::FEDataManager*>& fe_data_managers,
-                        const std::string& restart_read_dirname = "",
-                        unsigned int restart_restore_number = 0);
+                        const std::vector<IBTK::FEDataManager*>& fe_data_managers);
 
     /*!
      * \brief Constructor that takes in a boundary mesh. Note that BoundaryMeshMapping assumes ownership of the
@@ -34,9 +32,7 @@ public:
     BoundaryMeshMapping(std::string object_name,
                         SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                         libMesh::MeshBase* vol_mesh,
-                        IBTK::FEDataManager* fe_data_manager,
-                        const std::string& restart_read_dirname = "",
-                        unsigned int restart_restore_number = 0);
+                        IBTK::FEDataManager* fe_data_manager);
 
     /*!
      * \brief Default deconstructor.
@@ -110,15 +106,10 @@ public:
     virtual void setInitialConditions();
 
     /*!
-     * \brief Write data to a restart file.
-     */
-    virtual void writeFEDataToRestartFile(const std::string& restart_dump_dirname, unsigned int time_step_number);
-
-    /*!
      * \brief Spread the number of used wall sites. The provided patch index must have enough ghost cell width to
      * perform the requested spreading operation.
      */
-    void spreadWallSites(int w_idx);
+    void spreadWallSites(int w_idx = IBTK::invalid_index);
 
     /*!
      * \brief Return the patch index containing the wall sites. The Eulerian description of the wall sites are updated
@@ -151,12 +142,10 @@ protected:
 
     // We also maintain an Eulerian description of the wall sites
     SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_w_var;
-    int d_w_idx;
+    int d_w_idx = IBTK::invalid_index;
 
 private:
-    void commonConstructor(SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                           std::string restart_read_dirname,
-                           unsigned int restart_restore_number);
+    void commonConstructor(SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
 };
 
 } // namespace IBAMR

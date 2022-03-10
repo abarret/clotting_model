@@ -14,50 +14,31 @@
 
 namespace IBAMR
 {
-std::string
-get_libmesh_restart_file_name(const std::string& restart_dump_dirname,
-                              const std::string& base_filename,
-                              unsigned int time_step_number,
-                              unsigned int part,
-                              const std::string& extension)
-{
-    std::ostringstream file_name_prefix;
-    file_name_prefix << restart_dump_dirname << "/" << base_filename << "_part_" << part << "." << std::setw(6)
-                     << std::setfill('0') << std::right << time_step_number << "." << extension;
-    return file_name_prefix.str();
-}
 BoundaryMeshMapping::BoundaryMeshMapping(std::string object_name,
                                          Pointer<Database> input_db,
                                          MeshBase* vol_mesh,
-                                         FEDataManager* vol_data_manager,
-                                         const std::string& restart_read_dirname,
-                                         const unsigned int restart_restore_number)
+                                         FEDataManager* vol_data_manager)
     : d_object_name(std::move(object_name)), d_vol_meshes({ vol_mesh }), d_vol_data_managers({ vol_data_manager })
 {
-    commonConstructor(input_db, restart_read_dirname, restart_restore_number);
+    commonConstructor(input_db);
 }
 
 BoundaryMeshMapping::BoundaryMeshMapping(std::string object_name,
                                          Pointer<Database> input_db,
                                          const std::vector<MeshBase*>& vol_meshes,
-                                         const std::vector<FEDataManager*>& fe_data_managers,
-                                         const std::string& restart_read_dirname,
-                                         const unsigned int restart_restore_number)
+                                         const std::vector<FEDataManager*>& fe_data_managers)
     : d_object_name(std::move(object_name)), d_vol_meshes(vol_meshes), d_vol_data_managers(fe_data_managers)
 {
-    commonConstructor(input_db, restart_read_dirname, restart_restore_number);
+    commonConstructor(input_db);
 }
 
 void
-BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
-                                       std::string restart_read_dirname,
-                                       unsigned int restart_restore_number)
+BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db)
 {
     d_w_var = new CellVariable<NDIM, double>(d_object_name + "::w_var");
     auto var_db = VariableDatabase<NDIM>::getDatabase();
     d_w_idx = var_db->registerVariableAndContext(d_w_var, var_db->getContext(d_object_name + "::ctx"), /*ghosts*/ 4);
 
-    const bool from_restart = RestartManager::getManager()->isFromRestart();
     unsigned int num_parts = d_vol_meshes.size();
     d_bdry_meshes.resize(num_parts);
     d_bdry_eq_sys_vec.resize(num_parts);
@@ -99,26 +80,14 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db,
         d_fe_data[part] = std::make_shared<FEData>(
             d_object_name + "::FEData::" + std::to_string(part), *d_bdry_eq_sys_vec[part], true);
 
-        if (from_restart)
-        {
-            const std::string& file_name = get_libmesh_restart_file_name(
-                restart_read_dirname, d_object_name, restart_restore_number, part, d_libmesh_restart_file_extension);
-            const XdrMODE xdr_mode = (d_libmesh_restart_file_extension == "xdr" ? DECODE : READ);
-            const int read_mode =
-                EquationSystems::READ_HEADER | EquationSystems::READ_DATA | EquationSystems::READ_ADDITIONAL_DATA;
-            d_bdry_eq_sys_vec[part]->read(file_name, xdr_mode, read_mode, /*partition_agnostic*/ true);
-        }
-        else
-        {
-            auto& X_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_coords_sys_name);
-            for (unsigned int d = 0; d < NDIM; ++d) X_sys.add_variable("X_" + std::to_string(d), FEType());
-            auto& dX_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_disp_sys_name);
-            for (unsigned int d = 0; d < NDIM; ++d) dX_sys.add_variable("dX_" + std::to_string(d), FEType());
-            auto& W_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_W_sys_name);
-            W_sys.add_variable("W", FEType());
-            W_sys.assemble_before_solve = false;
-            W_sys.assemble();
-        }
+        auto& X_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_coords_sys_name);
+        for (unsigned int d = 0; d < NDIM; ++d) X_sys.add_variable("X_" + std::to_string(d), FEType());
+        auto& dX_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_disp_sys_name);
+        for (unsigned int d = 0; d < NDIM; ++d) dX_sys.add_variable("dX_" + std::to_string(d), FEType());
+        auto& W_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_W_sys_name);
+        W_sys.add_variable("W", FEType());
+        W_sys.assemble_before_solve = false;
+        W_sys.assemble();
     }
 
     return;
@@ -195,15 +164,6 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t
     X_bdry_sys.update();
     dX_bdry_sys.update();
 
-    // We should update the fe_data_manager's elem-patch map
-    d_bdry_data_managers[part]->reinitElementMappings();
-
-    // Spread the wall sites to the Eulerian grid
-    for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
-    {
-        Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
-        if (!level->checkAllocated(d_w_idx)) level->allocatePatchData(d_w_idx, 0.0);
-    }
     spreadWallSites(d_w_idx);
     return;
 }
@@ -227,18 +187,19 @@ BoundaryMeshMapping::setInitialConditions()
             const Node* const node = *it;
             std::vector<dof_id_type> W_dofs;
             W_dof_map.dof_indices(node, W_dofs);
-            for (int d = 0; d < NDIM; ++d) W_vec->set(W_dofs[d], 1.0);
+            W_vec->set(W_dofs[0], 1.0);
         }
         W_vec->close();
         W_sys.update();
     }
+
+    // Spread wall sites
+    spreadWallSites(d_w_idx);
 }
 
 void
 BoundaryMeshMapping::initializeEquationSystems()
 {
-    const bool from_restart = RestartManager::getManager()->isFromRestart();
-    if (from_restart) return;
     d_hierarchy = d_vol_data_managers[0]->getPatchHierarchy();
     for (unsigned int part = 0; part < d_bdry_meshes.size(); ++part)
     {
@@ -260,8 +221,15 @@ BoundaryMeshMapping::initializeEquationSystems()
 }
 
 void
-BoundaryMeshMapping::spreadWallSites(const int w_idx)
+BoundaryMeshMapping::spreadWallSites(int w_idx)
 {
+    if (w_idx == IBTK::invalid_index) w_idx = d_w_idx;
+    // Double check that wall sites are allocated
+    for (int ln = 0; ln <= d_hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = d_hierarchy->getPatchLevel(ln);
+        if (!level->checkAllocated(w_idx)) level->allocatePatchData(w_idx);
+    }
     plog << "Spreading wall sites to the fluid.\n";
     // First zero out w_idx.
     // TODO: Should we always zero out w_idx? Maybe include an option
@@ -279,23 +247,11 @@ BoundaryMeshMapping::spreadWallSites(const int w_idx)
     // Now spread W_vec to w_idx.
     for (const auto& bdry_data_manager : d_bdry_data_managers)
     {
+        bdry_data_manager->reinitElementMappings();
         NumericVector<double>* W_vec = bdry_data_manager->buildGhostedSolutionVector(d_W_sys_name);
         NumericVector<double>* X_vec =
             bdry_data_manager->buildGhostedSolutionVector(bdry_data_manager->COORDINATES_SYSTEM_NAME);
         bdry_data_manager->spread(w_idx, *W_vec, *X_vec, d_W_sys_name);
-    }
-}
-
-void
-BoundaryMeshMapping::writeFEDataToRestartFile(const std::string& restart_dump_dirname, unsigned int time_step_number)
-{
-    for (unsigned int part = 0; part < d_bdry_eq_sys_vec.size(); ++part)
-    {
-        const std::string& file_name = get_libmesh_restart_file_name(
-            restart_dump_dirname, d_object_name, time_step_number, part, d_libmesh_restart_file_extension);
-        const XdrMODE xdr_mode = (d_libmesh_restart_file_extension == "xdr" ? ENCODE : WRITE);
-        const int write_mode = EquationSystems::WRITE_DATA | EquationSystems::WRITE_ADDITIONAL_DATA;
-        d_bdry_eq_sys_vec[part]->write(file_name, xdr_mode, write_mode, /*partition_agnostic*/ true);
     }
 }
 } // namespace IBAMR

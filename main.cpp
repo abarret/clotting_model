@@ -51,10 +51,12 @@
 
 #include <fstream>
 #include <iostream>
-#include <math.h>
 
 // Local Headers
+#include "BondSource.h"
+#include "BoundaryMeshMapping.h"
 #include "CohesionStressRHS.h"
+#include "PlateletSource.h"
 
 // Function prototypes
 void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
@@ -66,8 +68,7 @@ void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
 struct BetaFcn
 {
 public:
-    BetaFcn(const double R0, const double beta_0, const double beta_1)
-        : d_R0(R0), d_beta_0(beta_0), d_beta_1(beta_1)
+    BetaFcn(const double R0, const double beta_0, const double beta_1) : d_R0(R0), d_beta_0(beta_0), d_beta_1(beta_1)
     {
         // intentionally blank
         return;
@@ -76,7 +77,8 @@ public:
     {
         if (eps > d_R0)
         {
-            return d_beta_0 * std::exp(d_beta_1 * (eps - d_R0));
+            // return d_beta_0 * std::exp(d_beta_1 * (eps - d_R0));
+            return d_beta_0 * (1.0 + d_beta_1 * (eps - d_R0));
         }
         else
         {
@@ -277,7 +279,10 @@ main(int argc, char* argv[])
             new IBFEMethod("IBFEMethod",
                            app_initializer->getComponentDatabase("IBFEMethod"),
                            &mesh,
-                           app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"));
+                           app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"),
+                           true,
+                           app_initializer->getRestartReadDirectory(),
+                           app_initializer->getRestartRestoreNumber());
         Pointer<IBHierarchyIntegrator> time_integrator =
             new IBExplicitHierarchyIntegrator("IBHierarchyIntegrator",
                                               app_initializer->getComponentDatabase("IBHierarchyIntegrator"),
@@ -352,6 +357,12 @@ main(int argc, char* argv[])
         {
             time_integrator->registerVisItDataWriter(visit_data_writer);
         }
+
+        // Create advected quantities
+        Pointer<CellVariable<NDIM, double>> phi_u_var = new CellVariable<NDIM, double>("phi_u");
+        Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
+        Pointer<CellVariable<NDIM, double>> bond_var = new CellVariable<NDIM, double>("bond");
+
         // Set up Cohesion stress tensor
         Pointer<CFINSForcing> cohesionStressForcing =
             new CFINSForcing("CohesionStressForcing",
@@ -362,52 +373,120 @@ main(int argc, char* argv[])
                              visit_data_writer);
         ins_integrator->registerBodyForceFunction(cohesionStressForcing);
         Pointer<CohesionStressRHS> cohesion_relax =
-            new CohesionStressRHS("CohesionRHS", app_initializer->getComponentDatabase("CohesionRHS"));
+            new CohesionStressRHS(phi_u_var,
+                                  phi_a_var,
+                                  bond_var,
+                                  "CohesionRHS",
+                                  app_initializer->getComponentDatabase("CohesionRHS"),
+                                  adv_diff_integrator);
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
-        // TODO: Set up betaFcn correctly
-        // eps0 = (3*a2) / a0
-        BetaFcn betaFcn(0.0, 0.0, 0.0);
-        cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
 
-        // Set up platelet and activating chemical advection
-        Pointer<CellVariable<NDIM, double>> phi_n_var = new CellVariable<NDIM, double>("phi_n");
-        Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
-        Pointer<CellVariable<NDIM, double>> c_var = new CellVariable<NDIM, double>("c");
-        std::vector<Pointer<CellVariable<NDIM, double>>> adv_vars = { phi_n_var, phi_a_var, c_var };
-        std::vector<Pointer<CellVariable<NDIM, double>>> src_vars = { new CellVariable<NDIM, double>("phi_n_src"),
-                                                                      new CellVariable<NDIM, double>("phi_a_src"),
-                                                                      new CellVariable<NDIM, double>("c_src") };
-        // TODO: set up source functions
-        std::vector<Pointer<CartGridFunction>> src_fcns(adv_vars.size(), nullptr);
-        for (size_t i = 0; i < adv_vars.size(); ++i)
-        {
-            const Pointer<CellVariable<NDIM, double>>& adv_var = adv_vars[i];
-            adv_diff_integrator->registerTransportedQuantity(adv_var);
-            // Note fluid advection variable is already registered from CFINSForcing
-            adv_diff_integrator->setAdvectionVelocity(adv_var, ins_integrator->getAdvectionVelocityVariable());
-            adv_diff_integrator->setDiffusionCoefficient(adv_var, input_db->getDouble(adv_var->getName() + "_D"));
-            // Need to register source term
-            adv_diff_integrator->registerSourceTerm(src_vars[i]);
-            adv_diff_integrator->setSourceTermFunction(src_vars[i], src_fcns[i]);
-            adv_diff_integrator->setSourceTerm(adv_var, src_vars[i]);
-        }
+        double beta_0 = input_db->getDouble("BETA_0");
+        double beta_1 = input_db->getDouble("BETA_1");
+        double r_0 = input_db->getDouble("R_0");
+        BetaFcn betaFcn(r_0, beta_0, beta_1);
+        cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
+        Pointer<CellVariable<NDIM, double>> sig_var = cohesionStressForcing->getVariable();
+        // Set up platelet concentrations and bond information
+
+        // Unactivated
+        adv_diff_integrator->registerTransportedQuantity(phi_u_var);
+        Pointer<CellVariable<NDIM, double>> phi_u_src_var = new CellVariable<NDIM, double>("phi_u_src");
+        adv_diff_integrator->setAdvectionVelocity(phi_u_var, ins_integrator->getAdvectionVelocityVariable());
+        adv_diff_integrator->setDiffusionCoefficient(phi_u_var, input_db->getDouble("UNACTIVATED_DIFFUSION_COEF"));
+        Pointer<PlateletSource> phi_u_src_fcn = new PlateletSource(
+            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
+        phi_u_src_fcn->setSign(false);
+        phi_u_src_fcn->setKernel(BSPLINE_3);
+        adv_diff_integrator->registerSourceTerm(phi_u_src_var);
+        adv_diff_integrator->setSourceTermFunction(phi_u_src_var, phi_u_src_fcn);
+        adv_diff_integrator->setSourceTerm(phi_u_var, phi_u_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> phi_u_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            phi_u_bcs = new muParserRobinBcCoefs("UnactivatedPlateletsBcs",
+                                                 app_initializer->getComponentDatabase("UnactivatedPlateletBcs"),
+                                                 grid_geometry);
+        adv_diff_integrator->setPhysicalBcCoef(phi_u_var, phi_u_bcs.getPointer());
+
+        // Activated
+        adv_diff_integrator->registerTransportedQuantity(phi_a_var);
+        Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
+        adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
+        adv_diff_integrator->setDiffusionCoefficient(phi_a_var, input_db->getDouble("ACTIVATED_DIFFUSION_COEF"));
+        Pointer<PlateletSource> phi_a_src_fcn = new PlateletSource(
+            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
+        phi_a_src_fcn->setSign(true);
+        phi_a_src_fcn->setKernel(BSPLINE_3);
+        adv_diff_integrator->registerSourceTerm(phi_a_src_var);
+        adv_diff_integrator->setSourceTermFunction(phi_a_src_var, phi_a_src_fcn);
+        adv_diff_integrator->setSourceTerm(phi_a_var, phi_a_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> phi_a_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            phi_a_bcs = new muParserRobinBcCoefs(
+                "ActivatedPlateletsBcs", app_initializer->getComponentDatabase("ActivatedPlateletBcs"), grid_geometry);
+        adv_diff_integrator->setPhysicalBcCoef(phi_a_var, phi_a_bcs.getPointer());
+
+        // Bonds
+        adv_diff_integrator->registerTransportedQuantity(bond_var);
+        Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
+        adv_diff_integrator->setAdvectionVelocity(bond_var, ins_integrator->getAdvectionVelocityVariable());
+        adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
+        Pointer<BondSource> bond_src_fcn = new BondSource(phi_u_var,
+                                                          phi_a_var,
+                                                          bond_var,
+                                                          sig_var,
+                                                          app_initializer->getComponentDatabase("BondVariable"),
+                                                          adv_diff_integrator);
+        bond_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
+        adv_diff_integrator->registerSourceTerm(bond_src_var);
+        adv_diff_integrator->setSourceTermFunction(bond_src_var, bond_src_fcn);
+        adv_diff_integrator->setSourceTerm(bond_var, bond_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> bond_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            bond_bcs = new muParserRobinBcCoefs(
+                "BondVariableBcs", app_initializer->getComponentDatabase("BondVariableBcs"), grid_geometry);
+        adv_diff_integrator->setPhysicalBcCoef(bond_var, bond_bcs.getPointer());
+
+        // Wall sites
+        FEDataManager* vol_data_manager = ib_method_ops->getFEDataManager();
+        BoundaryMeshMapping bdry_mesh_mapping(
+            "BoundaryMesh", app_initializer->getComponentDatabase("BoundaryMesh"), &mesh, vol_data_manager);
+        const int w_idx = bdry_mesh_mapping.getWallSitesPatchIndex();
+        auto update_bdry_mesh = [](const double current_time,
+                                   const double new_time,
+                                   bool /*skip_synchronize_new_state_data*/,
+                                   int /*num_cycles*/,
+                                   void* ctx) {
+            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
+            bdry_mesh_mapping->updateBoundaryLocation(current_time, new_time, false);
+        };
+        auto regrid_callback = [](SAMRAI::tbox::Pointer<SAMRAI::hier::BasePatchHierarchy<NDIM>> /*hierarchy*/,
+                                  const double /*time*/,
+                                  const bool /*initial_time*/,
+                                  void* ctx) {
+            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
+            bdry_mesh_mapping->spreadWallSites();
+        };
+        time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
+                                                                       static_cast<void*>(&bdry_mesh_mapping));
+        time_integrator->registerRegridHierarchyCallback(regrid_callback, static_cast<void*>(&bdry_mesh_mapping));
+        visit_data_writer->registerPlotQuantity("wall_sites", "SCALAR", w_idx);
 
         EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
+        bool from_restart = RestartManager::getManager()->isFromRestart();
+        if (exodus_io) exodus_io->append(from_restart);
 
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
+        bdry_mesh_mapping.initializeEquationSystems();
 
-        // TODO: set up cohesian relaxation function correctly
-        {
-            auto var_db = VariableDatabase<NDIM>::getDatabase();
-            const int phi_a_idx =
-                var_db->mapVariableAndContextToIndex(phi_a_var, adv_diff_integrator->getCurrentContext());
-            // NOTE: This should be z_var, not c_var. But we haven't set up z_var yet.
-            const int z_idx = var_db->mapVariableAndContextToIndex(c_var, adv_diff_integrator->getCurrentContext());
-            cohesion_relax->setZIdx(z_idx);
-        }
+        // Make sure source terms are set correctly.
+        cohesion_relax->setOmegaIdx(w_idx);
+        phi_u_src_fcn->setWIdx(w_idx);
+        phi_a_src_fcn->setWIdx(w_idx);
+        bond_src_fcn->setWIdx(w_idx);
 
         // Deallocate initialization objects.
         app_initializer.setNull();
@@ -479,6 +558,7 @@ main(int argc, char* argv[])
             {
                 pout << "\nWriting restart files...\n\n";
                 RestartManager::getManager()->writeRestartFile(restart_dump_dirname, iteration_num);
+                ib_method_ops->writeFEDataToRestartFile(restart_dump_dirname, iteration_num);
             }
             if (dump_timer_data && (iteration_num % timer_dump_interval == 0 || last_step))
             {

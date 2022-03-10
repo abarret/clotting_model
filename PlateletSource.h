@@ -11,8 +11,8 @@
 //
 // ---------------------------------------------------------------------
 
-#ifndef included_ActivatedPlateletSource
-#define included_ActivatedPlateletSource
+#ifndef included_PlateletSource
+#define included_PlateletSource
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
 
@@ -22,24 +22,23 @@
 namespace IBAMR
 {
 /*!
- * \brief Class ActivatedPlateletSource provides a source term for the activated platelet concentration.
+ * \brief Class PlateletSource provides a source term for the activated platelet concentration.
  */
-class ActivatedPlateletSource : public IBTK::CartGridFunction
+class PlateletSource : public IBTK::CartGridFunction
 {
 public:
     /*!
      * \brief Class constructor.
      */
-    ActivatedPlateletSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> w_var,
-                            SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                            SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
+    PlateletSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+                   SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+                   SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+                   SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
 
     /*!
      * \brief Empty destructor.
      */
-    ~ActivatedPlateletSource() = default;
+    ~PlateletSource() = default;
 
     /*!
      * \name Methods to set patch data.
@@ -47,7 +46,7 @@ public:
     //\{
 
     /*!
-     * \brief Indicates whether the concrete ActivatedPlateletSource object is
+     * \brief Indicates whether the concrete PlateletSource object is
      * time-dependent.
      */
     bool isTimeDependent() const override;
@@ -87,22 +86,30 @@ public:
         d_sign = (positive) ? 1.0 : -1.0;
     }
 
+    inline void setWIdx(const int w_idx)
+    {
+        d_w_idx = w_idx;
+    }
+
 private:
-    ActivatedPlateletSource() = delete;
+    PlateletSource() = delete;
     double d_Kua = std::numeric_limits<double>::quiet_NaN();
     double d_Kuw = std::numeric_limits<double>::quiet_NaN();
-    double d_w_mx = std::numeric_limits<double>::quiet_NaN();
     double d_sign = 1.0;
-    IBAMR::Kernel d_kernel = UNKNOWN_KERNEL;
+    Kernel d_kernel = UNKNOWN_KERNEL;
 
-    ActivatedPlateletSource(const ActivatedPlateletSource& from) = delete;
+    PlateletSource(const PlateletSource& from) = delete;
 
-    ActivatedPlateletSource& operator=(const ActivatedPlateletSource& that) = delete;
+    PlateletSource& operator=(const PlateletSource& that) = delete;
 
-    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_w_var;
+    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var;
+    int d_w_idx = IBTK::invalid_index;
     SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
+
+    // Note we need our own scratch index with larger ghost width to compute the convolution.
+    int d_pl_scr_idx = IBTK::invalid_index;
 };
 } // namespace IBAMR
 //////////////////////////////////////////////////////////////////////////////
 
-#endif //#ifndef included_ActivatedPlateletSource
+#endif //#ifndef included_PlateletSource

@@ -24,35 +24,36 @@
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
 BondSource::BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
+                       SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+                       SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
+                       SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
+                       SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+                       SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
     : d_phi_u_var(phi_u_var),
       d_phi_a_var(phi_a_var),
-      d_z_var(z_var), 
+      d_z_var(z_var),
       d_sig_var(sig_var),
-      d_adv_diff_hier_integrator(adv_diff_hier_integrator) 
+      d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // init db vars
-    d_a0 =  input_db->getDouble("a0");
+    d_a0 = input_db->getDouble("a0");
     d_a0w = input_db->getDouble("a0w");
-    d_w_mx = input_db->getDouble("wmax");
 } // BondSource
 
-bool BondSource::isTimeDependent() const
+bool
+BondSource::isTimeDependent() const
 {
     return true;
 } // isTimeDependent
 
-void BondSource::setDataOnPatchHierarchy(const int data_idx,
-                                                 Pointer<Variable<NDIM>> var,
-                                                 Pointer<PatchHierarchy<NDIM>> hierarchy,
-                                                 const double data_time,
-                                                 const bool initial_time,
-                                                 const int coarsest_ln_in,
-                                                 const int finest_ln_in)
+void
+BondSource::setDataOnPatchHierarchy(const int data_idx,
+                                    Pointer<Variable<NDIM>> var,
+                                    Pointer<PatchHierarchy<NDIM>> hierarchy,
+                                    const double data_time,
+                                    const bool initial_time,
+                                    const int coarsest_ln_in,
+                                    const int finest_ln_in)
 {
     // This implementation atm is identical to ActivatePlatelet Source
     // Loop over variables.
@@ -133,12 +134,13 @@ void BondSource::setDataOnPatchHierarchy(const int data_idx,
     return;
 } // setDataOnPatchHierarchy
 
-void BondSource::setDataOnPatch(const int data_idx,
-                                        Pointer<Variable<NDIM>> /*var*/,
-                                        Pointer<Patch<NDIM>> patch,
-                                        const double /*data_time*/,
-                                        const bool initial_time,
-                                        Pointer<PatchLevel<NDIM>> /*patch_level*/)
+void
+BondSource::setDataOnPatch(const int data_idx,
+                           Pointer<Variable<NDIM>> /*var*/,
+                           Pointer<Patch<NDIM>> patch,
+                           const double /*data_time*/,
+                           const bool initial_time,
+                           Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     // Computes alpha - beta * z
     Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(data_idx);
@@ -167,22 +169,23 @@ void BondSource::setDataOnPatch(const int data_idx,
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
         // Compute alpha data
-        double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * (d_w_mx - w) * phi_u);
-        #if (NDIM == 2)
-            const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1);
-            const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
-            double beta = d_beta_fcn(y_brackets);
-        #endif
-        #if (NDIM == 3)
-            const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1) + (*sig_data)(idx, 2);
-            const double y_brackets = std::sqrt(trace / (z + 1.0e-12));
-            double beta = d_beta_fcn(y_brackets);
-        #endif
+        double alpha = (d_a0 * phi_a * phi_a) + (d_a0w * w * phi_a);
+#if (NDIM == 2)
+        const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1);
+        const double y_brackets = trace / (z + 1.0e-8);
+        double beta = d_beta_fcn(y_brackets);
+#endif
+#if (NDIM == 3)
+        const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1) + (*sig_data)(idx, 2);
+        const double y_brackets = trace / (z + 1.0e-8);
+        double beta = d_beta_fcn(y_brackets);
+#endif
         (*bond_data)(idx) = alpha - beta * z;
     }
 } // setDataOnPatch
 
-void BondSource::registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta)
+void
+BondSource::registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta)
 {
     // We set beta here
     d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);

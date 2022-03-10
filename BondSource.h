@@ -15,7 +15,6 @@
 #define included_BondSource
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
-#include "utility_functions.h"
 
 #include "Box.h"
 #include "CartesianPatchGeometry.h"
@@ -39,77 +38,77 @@
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
 namespace IBAMR
 {
-    class BondSource : public IBTK::CartGridFunction
-    {
-        public:
-        /*!
-         * \brief Class constructor.
-         */
-        BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
-                    SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
+class BondSource : public IBTK::CartGridFunction
+{
+public:
+    /*!
+     * \brief Class constructor.
+     */
+    BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+               SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+               SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
+               SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
+               SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+               SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
 
-        /*!
-         * \brief Empty destructor.
-         */
-        ~BondSource() = default;
+    /*!
+     * \brief Empty destructor.
+     */
+    ~BondSource() = default;
 
-        /*!
-         * \brief Indicates whether the concrete BondSource object is
-         * time-dependent.
-         */
-        bool isTimeDependent() const override;
+    /*!
+     * \brief Indicates whether the concrete BondSource object is
+     * time-dependent.
+     */
+    bool isTimeDependent() const override;
 
-        /*!
-         * \brief Evaluate the function on the patch interiors on the specified
-         * levels of the patch hierarchy.
-        */
-        void setDataOnPatchHierarchy(const int data_idx,
-                                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
-                                    SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> hierarchy,
-                                    const double data_time,
-                                    const bool initial_time = false,
-                                    const int coarsest_ln = -1,
-                                    const int finest_ln = -1) override;
+    /*!
+     * \brief Evaluate the function on the patch interiors on the specified
+     * levels of the patch hierarchy.
+     */
+    void setDataOnPatchHierarchy(const int data_idx,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> hierarchy,
+                                 const double data_time,
+                                 const bool initial_time = false,
+                                 const int coarsest_ln = -1,
+                                 const int finest_ln = -1) override;
 
-        /*!
-         * \brief Evaluate the function on the patch interior.
-         */
-        void setDataOnPatch(const int data_idx,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
-                            const double data_time,
-                            const bool initial_time = false,
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> patch_level =
+    /*!
+     * \brief Evaluate the function on the patch interior.
+     */
+    void setDataOnPatch(const int data_idx,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
+                        const double data_time,
+                        const bool initial_time = false,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> patch_level =
                             SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>>(NULL)) override;
 
-        void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
+    void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
 
-        inline void setWIdx(const int w_idx)
-        {
-            d_w_idx = w_idx;
-        }
-        private:
-        // INPUT DB VARS (I assume eq. 8-10 in new model correspond to bond source)
-        double d_a0 = std::numeric_limits<double>::quiet_NaN();
-        double d_a0w = std::numeric_limits<double>::quiet_NaN();
-        double d_w_mx = std::numeric_limits<double>::quiet_NaN();
+    inline void setWIdx(const int w_idx)
+    {
+        d_w_idx = w_idx;
+    }
 
-        // wall index
-        int d_w_idx = IBTK::invalid_index;
+private:
+    // INPUT DB VARS (I assume eq. 8-10 in new model correspond to bond source)
+    double d_a0 = std::numeric_limits<double>::quiet_NaN();
+    double d_a0w = std::numeric_limits<double>::quiet_NaN();
 
-        // Beta function pointer
-        std::function<double(double)> d_beta_fcn;
+    // wall index
+    int d_w_idx = IBTK::invalid_index;
 
-        // OTHER THINGS
-        BondSource(const BondSource& from) = delete;
-        BondSource& operator=(const BondSource& that) = delete;
-        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var, d_sig_var;
-        SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
-    };
-}
+    // Beta function pointer
+    std::function<double(double)> d_beta_fcn;
+
+    // OTHER THINGS
+    BondSource(const BondSource& from) = delete;
+    BondSource& operator=(const BondSource& that) = delete;
+    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var, d_sig_var;
+    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
+};
+} // namespace IBAMR
 
 #endif
