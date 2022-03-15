@@ -53,51 +53,6 @@
 #include <iostream>
 
 // Local Headers
-#include "BondSource.h"
-#include "BoundaryMeshMapping.h"
-#include "CohesionStressRHS.h"
-#include "PlateletSource.h"
-
-// Function prototypes
-void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
-                 Pointer<INSHierarchyIntegrator> ins_integrator,
-                 const int iteration_num,
-                 const double loop_time,
-                 const string& data_dump_dirname);
-
-struct BetaFcn
-{
-public:
-    BetaFcn(const double R0, const double beta_0, const double beta_1) : d_R0(R0), d_beta_0(beta_0), d_beta_1(beta_1)
-    {
-        // intentionally blank
-        return;
-    }
-    double beta(const double eps)
-    {
-        if (eps > d_R0)
-        {
-            // return d_beta_0 * std::exp(d_beta_1 * (eps - d_R0));
-            return d_beta_0 * (1.0 + d_beta_1 * (eps - d_R0));
-        }
-        else
-        {
-            return d_beta_0;
-        }
-    }
-
-private:
-    double d_R0 = std::numeric_limits<double>::quiet_NaN();
-    double d_beta_0 = std::numeric_limits<double>::quiet_NaN();
-    double d_beta_1 = std::numeric_limits<double>::quiet_NaN();
-};
-
-double
-beta_wrapper(const double eps, void* ctx)
-{
-    auto beta_fcn = static_cast<BetaFcn*>(ctx);
-    return beta_fcn->beta(eps);
-}
 
 namespace ModelData
 {
@@ -147,7 +102,6 @@ tether_penalty_stress_fcn(TensorValue<double>& PP,
 
 } // namespace ModelData
 using namespace ModelData;
-
 /*******************************************************************************
  * For each run, the input filename and restart information (if needed) must   *
  * be given on the command line.  For non-restarted case, command line is:     *
@@ -188,15 +142,12 @@ main(int argc, char* argv[])
                  << "Exodus output will be written in this program.\n";
         }
 #endif
-        const std::string exodus_filename = app_initializer->getExodusIIFilename();
+        const std::string vol_ex_filename = app_initializer->getExodusIIFilename("vol");
+        const std::string bdry_ex_filename = app_initializer->getExodusIIFilename("bdry");
 
         const bool dump_restart_data = app_initializer->dumpRestartData();
         const int restart_dump_interval = app_initializer->getRestartDumpInterval();
         const string restart_dump_dirname = app_initializer->getRestartDumpDirectory();
-
-        const bool dump_postproc_data = app_initializer->dumpPostProcessingData();
-        const int postproc_data_dump_interval = app_initializer->getPostProcessingDataDumpInterval();
-        const string postproc_data_dump_dirname = app_initializer->getPostProcessingDataDumpDirectory();
 
         const bool dump_timer_data = app_initializer->dumpTimerData();
         const int timer_dump_interval = app_initializer->getTimerDumpInterval();
@@ -276,18 +227,11 @@ main(int argc, char* argv[])
         Pointer<INSHierarchyIntegrator> ins_integrator = new INSStaggeredHierarchyIntegrator(
             "INSStaggeredHierarchyIntegrator",
             app_initializer->getComponentDatabase("INSStaggeredHierarchyIntegrator"));
-        Pointer<AdvDiffSemiImplicitHierarchyIntegrator> adv_diff_integrator;
-        adv_diff_integrator = new AdvDiffSemiImplicitHierarchyIntegrator(
-            "AdvDiffSemiImplicitHierarchyIntegrator",
-            app_initializer->getComponentDatabase("AdvDiffSemiImplicitHierarchyIntegrator"));
         Pointer<IBFEMethod> ib_method_ops =
             new IBFEMethod("IBFEMethod",
                            app_initializer->getComponentDatabase("IBFEMethod"),
                            &mesh,
-                           app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"),
-                           true,
-                           app_initializer->getRestartReadDirectory(),
-                           app_initializer->getRestartRestoreNumber());
+                           app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"));
         Pointer<IBHierarchyIntegrator> time_integrator =
             new IBExplicitHierarchyIntegrator("IBHierarchyIntegrator",
                                               app_initializer->getComponentDatabase("IBHierarchyIntegrator"),
@@ -309,7 +253,6 @@ main(int argc, char* argv[])
                                         error_detector,
                                         box_generator,
                                         load_balancer);
-        ins_integrator->registerAdvDiffHierarchyIntegrator(adv_diff_integrator);
         // Create initial condition specification objects.
         Pointer<CartGridFunction> u_init = new muParserCartGridFunction(
             "u_init", app_initializer->getComponentDatabase("VelocityInitialConditions"), grid_geometry);
@@ -363,135 +306,12 @@ main(int argc, char* argv[])
             time_integrator->registerVisItDataWriter(visit_data_writer);
         }
 
-        // Create advected quantities
-        Pointer<CellVariable<NDIM, double>> phi_u_var = new CellVariable<NDIM, double>("phi_u");
-        Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
-        Pointer<CellVariable<NDIM, double>> bond_var = new CellVariable<NDIM, double>("bond");
-
-        // Set up Cohesion stress tensor
-        Pointer<CFINSForcing> cohesionStressForcing =
-            new CFINSForcing("CohesionStressForcing",
-                             app_initializer->getComponentDatabase("CohesionStress"),
-                             ins_integrator,
-                             grid_geometry,
-                             adv_diff_integrator,
-                             visit_data_writer);
-        ins_integrator->registerBodyForceFunction(cohesionStressForcing);
-        Pointer<CohesionStressRHS> cohesion_relax =
-            new CohesionStressRHS(phi_u_var,
-                                  phi_a_var,
-                                  bond_var,
-                                  "CohesionRHS",
-                                  app_initializer->getComponentDatabase("CohesionRHS"),
-                                  adv_diff_integrator);
-        cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
-
-        double beta_0 = input_db->getDouble("BETA_0");
-        double beta_1 = input_db->getDouble("BETA_1");
-        double r_0 = input_db->getDouble("R_0");
-        BetaFcn betaFcn(r_0, beta_0, beta_1);
-        cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
-        Pointer<CellVariable<NDIM, double>> sig_var = cohesionStressForcing->getVariable();
-        // Set up platelet concentrations and bond information
-
-        // Unactivated
-        adv_diff_integrator->registerTransportedQuantity(phi_u_var);
-        Pointer<CellVariable<NDIM, double>> phi_u_src_var = new CellVariable<NDIM, double>("phi_u_src");
-        adv_diff_integrator->setAdvectionVelocity(phi_u_var, ins_integrator->getAdvectionVelocityVariable());
-        adv_diff_integrator->setDiffusionCoefficient(phi_u_var, input_db->getDouble("UNACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_u_src_fcn = new PlateletSource(
-            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
-        phi_u_src_fcn->setSign(false);
-        phi_u_src_fcn->setKernel(BSPLINE_3);
-        adv_diff_integrator->registerSourceTerm(phi_u_src_var);
-        adv_diff_integrator->setSourceTermFunction(phi_u_src_var, phi_u_src_fcn);
-        adv_diff_integrator->setSourceTerm(phi_u_var, phi_u_src_var);
-        Pointer<RobinBcCoefStrategy<NDIM>> phi_u_bcs;
-        if (grid_geometry->getPeriodicShift().min() == 0)
-            phi_u_bcs = new muParserRobinBcCoefs("UnactivatedPlateletsBcs",
-                                                 app_initializer->getComponentDatabase("UnactivatedPlateletBcs"),
-                                                 grid_geometry);
-        adv_diff_integrator->setPhysicalBcCoef(phi_u_var, phi_u_bcs.getPointer());
-
-        // Activated
-        adv_diff_integrator->registerTransportedQuantity(phi_a_var);
-        Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
-        adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
-        adv_diff_integrator->setDiffusionCoefficient(phi_a_var, input_db->getDouble("ACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_a_src_fcn = new PlateletSource(
-            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
-        phi_a_src_fcn->setSign(true);
-        phi_a_src_fcn->setKernel(BSPLINE_3);
-        adv_diff_integrator->registerSourceTerm(phi_a_src_var);
-        adv_diff_integrator->setSourceTermFunction(phi_a_src_var, phi_a_src_fcn);
-        adv_diff_integrator->setSourceTerm(phi_a_var, phi_a_src_var);
-        Pointer<RobinBcCoefStrategy<NDIM>> phi_a_bcs;
-        if (grid_geometry->getPeriodicShift().min() == 0)
-            phi_a_bcs = new muParserRobinBcCoefs(
-                "ActivatedPlateletsBcs", app_initializer->getComponentDatabase("ActivatedPlateletBcs"), grid_geometry);
-        adv_diff_integrator->setPhysicalBcCoef(phi_a_var, phi_a_bcs.getPointer());
-
-        // Bonds
-        adv_diff_integrator->registerTransportedQuantity(bond_var);
-        Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
-        adv_diff_integrator->setAdvectionVelocity(bond_var, ins_integrator->getAdvectionVelocityVariable());
-        adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
-        Pointer<BondSource> bond_src_fcn = new BondSource(phi_u_var,
-                                                          phi_a_var,
-                                                          bond_var,
-                                                          sig_var,
-                                                          app_initializer->getComponentDatabase("BondVariable"),
-                                                          adv_diff_integrator);
-        bond_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
-        adv_diff_integrator->registerSourceTerm(bond_src_var);
-        adv_diff_integrator->setSourceTermFunction(bond_src_var, bond_src_fcn);
-        adv_diff_integrator->setSourceTerm(bond_var, bond_src_var);
-        Pointer<RobinBcCoefStrategy<NDIM>> bond_bcs;
-        if (grid_geometry->getPeriodicShift().min() == 0)
-            bond_bcs = new muParserRobinBcCoefs(
-                "BondVariableBcs", app_initializer->getComponentDatabase("BondVariableBcs"), grid_geometry);
-        adv_diff_integrator->setPhysicalBcCoef(bond_var, bond_bcs.getPointer());
-
-        // Wall sites
-        FEDataManager* vol_data_manager = ib_method_ops->getFEDataManager();
-        BoundaryMeshMapping bdry_mesh_mapping(
-            "BoundaryMesh", app_initializer->getComponentDatabase("BoundaryMesh"), &mesh, vol_data_manager);
-        const int w_idx = bdry_mesh_mapping.getWallSitesPatchIndex();
-        auto update_bdry_mesh = [](const double current_time,
-                                   const double new_time,
-                                   bool /*skip_synchronize_new_state_data*/,
-                                   int /*num_cycles*/,
-                                   void* ctx) {
-            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
-            bdry_mesh_mapping->updateBoundaryLocation(current_time, new_time, false);
-        };
-        auto regrid_callback = [](SAMRAI::tbox::Pointer<SAMRAI::hier::BasePatchHierarchy<NDIM>> /*hierarchy*/,
-                                  const double /*time*/,
-                                  const bool /*initial_time*/,
-                                  void* ctx) {
-            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
-            bdry_mesh_mapping->spreadWallSites();
-        };
-        time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
-                                                                       static_cast<void*>(&bdry_mesh_mapping));
-        time_integrator->registerRegridHierarchyCallback(regrid_callback, static_cast<void*>(&bdry_mesh_mapping));
-        visit_data_writer->registerPlotQuantity("wall_sites", "SCALAR", w_idx);
-
-        EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
-        std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
-        bool from_restart = RestartManager::getManager()->isFromRestart();
-        if (exodus_io) exodus_io->append(from_restart);
-
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
-        bdry_mesh_mapping.initializeEquationSystems();
 
-        // Make sure source terms are set correctly.
-        cohesion_relax->setOmegaIdx(w_idx);
-        phi_u_src_fcn->setWIdx(w_idx);
-        phi_a_src_fcn->setWIdx(w_idx);
-        bond_src_fcn->setWIdx(w_idx);
+        EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
+        std::unique_ptr<ExodusII_IO> vol_exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
 
         // Deallocate initialization objects.
         app_initializer.setNull();
@@ -513,7 +333,8 @@ main(int argc, char* argv[])
             }
             if (uses_exodus)
             {
-                exodus_io->write_timestep(exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                vol_exodus_io->write_timestep(
+                    vol_ex_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
             }
         }
 
@@ -555,54 +376,21 @@ main(int argc, char* argv[])
                 }
                 if (uses_exodus)
                 {
-                    exodus_io->write_timestep(
-                        exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                    vol_exodus_io->write_timestep(
+                        vol_ex_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
                 }
             }
             if (dump_restart_data && (iteration_num % restart_dump_interval == 0 || last_step))
             {
                 pout << "\nWriting restart files...\n\n";
                 RestartManager::getManager()->writeRestartFile(restart_dump_dirname, iteration_num);
-                ib_method_ops->writeFEDataToRestartFile(restart_dump_dirname, iteration_num);
             }
             if (dump_timer_data && (iteration_num % timer_dump_interval == 0 || last_step))
             {
                 pout << "\nWriting timer data...\n\n";
                 TimerManager::getManager()->print(plog);
             }
-            if (dump_postproc_data && (iteration_num % postproc_data_dump_interval == 0 || last_step))
-            {
-                output_data(patch_hierarchy, time_integrator, iteration_num, loop_time, postproc_data_dump_dirname);
-            }
         }
 
     } // cleanup dynamically allocated objects prior to shutdown
 } // main
-
-void
-output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
-            Pointer<INSHierarchyIntegrator> ins_integrator,
-            const int iteration_num,
-            const double loop_time,
-            const string& data_dump_dirname)
-{
-    plog << "writing hierarchy data at iteration " << iteration_num << " to disk" << endl;
-    plog << "simulation time is " << loop_time << endl;
-    string file_name = data_dump_dirname + "/" + "hier_data.";
-    char temp_buf[128];
-    sprintf(temp_buf, "%05d.samrai.%05d", iteration_num, IBTK_MPI::getRank());
-    file_name += temp_buf;
-    Pointer<HDFDatabase> hier_db = new HDFDatabase("hier_db");
-    hier_db->create(file_name);
-    VariableDatabase<NDIM>* var_db = VariableDatabase<NDIM>::getDatabase();
-    ComponentSelector hier_data;
-    hier_data.setFlag(var_db->mapVariableAndContextToIndex(ins_integrator->getVelocityVariable(),
-                                                           ins_integrator->getCurrentContext()));
-    hier_data.setFlag(var_db->mapVariableAndContextToIndex(ins_integrator->getPressureVariable(),
-                                                           ins_integrator->getCurrentContext()));
-    patch_hierarchy->putToDatabase(hier_db->putDatabase("PatchHierarchy"), hier_data);
-    hier_db->putDouble("loop_time", loop_time);
-    hier_db->putInteger("iteration_num", iteration_num);
-    hier_db->close();
-    return;
-} // output_data

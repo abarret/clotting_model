@@ -6,6 +6,8 @@ LX = 32.0
 LY = 4.0
 RATIO = LX / LY
 RE = 100.0
+P_INLET = 12.5
+RADIUS = 1.0
 
 // grid spacing parameters
 MAX_LEVELS = 3                            // maximum number of levels in locally refined grid
@@ -15,34 +17,6 @@ NX = RATIO*NY                                 // number of grid cells on coarses
 // Note that we use the same grid spacing in both directions
 NFINEST = (REF_RATIO^(MAX_LEVELS - 1))*NX  // effective number of grid cells on finest grid level in the X direction
 DX = LX / NFINEST
-
-// Complex Fluid parameters
-FLUID_MODEL = "USER_DEFINED"
-EVOLVE_TYPE = "STANDARD"
-LOG_DETERMINANT     = TRUE
-CONVECTIVE_OPERATOR_TYPE     = "WAVE_PROP"
-OUTPUT_CONFORMATION_TENSOR = TRUE
-OUTPUT_STRESS_TENSOR = FALSE
-RELAXATION_TIME = 1.0 // Only used to compute force from stress tensor
-VISCOSITY = 1.0       // Only used to compute force from stress tensor
-USING_EXACT_U = FALSE
-BDRY_INTERP_TYPE = "LINEAR"
-RADIUS = 1.0
-P_INLET = 12.5
-
-// Model parameters
-UNACTIVATED_DIFFUSION_COEF = 1.0e-7
-ACTIVATED_DIFFUSION_COEF = 1.0e-7
-C4 = 4.0
-A0 = 0.6
-A0W = 0.6
-BETA_0 = 0.05
-BETA_1 = 10.0
-R_0 = 1.0
-KUA = 0.6 / 12.0
-KUW = 0.6 / 12.0
-WMAX = 1.0
-PL_U_IN = 1.0
 
 // solver parameters
 NORMALIZE_VELOCITY = FALSE
@@ -76,176 +50,18 @@ OUTPUT_F           = TRUE
 OUTPUT_OMEGA       = TRUE
 OUTPUT_DIV_U       = TRUE
 ENABLE_LOGGING     = TRUE
-//Advection Diffusion solver parameters
-ADV_DIFF_SOLVER_TYPE = "SEMI_IMPLICIT"
-ADV_DIFF_NUM_CYCLES = 2
-ADV_DIFF_CONVECTIVE_OP_TYPE = "WAVE_PROP"
-ADV_DIFF_CONVECTIVE_TS_TYPE = "TRAPEZOIDAL_RULE"
-ADV_DIFF_CONVECTIVE_FORM = "ADVECTIVE"
-
-// collocated solver parameters
-PROJECTION_METHOD_TYPE = "PRESSURE_UPDATE"
-SECOND_ORDER_PRESSURE_UPDATE = TRUE
-P = "1.0"
 
 // Structural parameters
 KAPPA = 9.33837890625 * DX / DT_MAX / DT_MAX
 ETA = 0.873046875 * DX / DT_MAX
 BETA_S = 0.5*142.1875000*100.0
 ERROR_ON_MOVE = TRUE
-MFAC = 1.0
+MFAC = 1.5
 ELEM_TYPE = "TRI3"
 ELEM_ORDER = "SECOND"
 
-UnactivatedPlatelets
-{
-  Kua = KUA
-  Kuw = KUW
-  wmax = WMAX
-}
-
-ActivatedPlatelets
-{
-  Kua = KUA
-  Kuw = KUW
-  wmax = WMAX
-}
-
-BondVariable {
-  a0 = A0
-  a0w = A0W
-  wmax = WMAX
-}
-
-CohesionRHS {
-  c4 = C4
-  a0 = A0
-  a0w = A0W
-  wmax = WMAX
-}
-
 BoundaryMesh {
-
-}
-
-ActivatedPlateletBcs
-{
-  acoef_function_0 = "1.0"
-  acoef_function_1 = "0.0"
-  acoef_function_2 = "0.0"
-  acoef_function_3 = "0.0"
-  
-  bcoef_function_0 = "0.0"
-  bcoef_function_1 = "1.0"
-  bcoef_function_2 = "1.0"
-  bcoef_function_3 = "1.0"
-  
-  gcoef_function_0 = "0.0"
-  gcoef_function_1 = "0.0"
-  gcoef_function_2 = "0.0"
-  gcoef_function_3 = "0.0"
-}
-
-UnactivatedPlateletBcs
-{
-  pl_in = PL_U_IN
-  acoef_function_0 = "1.0"
-  acoef_function_1 = "0.0"
-  acoef_function_2 = "0.0"
-  acoef_function_3 = "0.0"
-
-  bcoef_function_0 = "0.0"
-  bcoef_function_1 = "1.0"
-  bcoef_function_2 = "1.0"
-  bcoef_function_3 = "1.0"
-
-  gcoef_function_0 = "pl_in"
-  gcoef_function_1 = "0.0"
-  gcoef_function_2 = "0.0"
-  gcoef_function_3 = "0.0"
-}
-
-BondVariableBcs
-{
-  acoef_function_0 = "0.0"
-  acoef_function_1 = "0.0"
-  acoef_function_2 = "0.0"
-  acoef_function_3 = "0.0"
-
-  bcoef_function_0 = "1.0"
-  bcoef_function_1 = "1.0"
-  bcoef_function_2 = "1.0"
-  bcoef_function_3 = "1.0"
-
-  gcoef_function_0 = "0.0"
-  gcoef_function_1 = "0.0"
-  gcoef_function_2 = "0.0"
-  gcoef_function_3 = "0.0"
-}
-
-CohesionStress {
-InitialConditions{
- function_0 = "0.0"
- function_1 = "0.0"
- function_2 = "0.0"
-}
-ExtraStressBoundaryConditions_0 {
- acoef_function_0 = "0.0"
- acoef_function_1 = "0.0"
- acoef_function_2 = "0.0"
- acoef_function_3 = "0.0"
-
- bcoef_function_0 = "1.0"
- bcoef_function_1 = "1.0"
- bcoef_function_2 = "1.0"
- bcoef_function_3 = "1.0"
-
- gcoef_function_0 = "0.0"
- gcoef_function_1 = "0.0"
- gcoef_function_2 = "0.0"
- gcoef_function_3 = "0.0"
-}
-ExtraStressBoundaryConditions_1 {
- acoef_function_0 = "0.0"
- acoef_function_1 = "0.0"
- acoef_function_2 = "0.0"
- acoef_function_3 = "0.0"
-
- bcoef_function_0 = "1.0"
- bcoef_function_1 = "1.0"
- bcoef_function_2 = "1.0"
- bcoef_function_3 = "1.0"
-
- gcoef_function_0 = "0.0"
- gcoef_function_1 = "0.0"
- gcoef_function_2 = "0.0"
- gcoef_function_3 = "0.0"
-}
-ExtraStressBoundaryConditions_2 {
- acoef_function_0 = "0.0"
- acoef_function_1 = "0.0"
- acoef_function_2 = "0.0"
- acoef_function_3 = "0.0"
-
- bcoef_function_0 = "1.0"
- bcoef_function_1 = "1.0"
- bcoef_function_2 = "1.0"
- bcoef_function_3 = "1.0"
-
- gcoef_function_0 = "0.0"
- gcoef_function_1 = "0.0"
- gcoef_function_2 = "0.0"
- gcoef_function_3 = "0.0"
-}
-relaxation_time = RELAXATION_TIME
-viscosity = VISCOSITY
-fluid_model         = FLUID_MODEL
-evolution_type = EVOLVE_TYPE
-log_determinant     = LOG_DETERMINANT
-convective_operator_type     = CONVECTIVE_OPERATOR_TYPE
-output_stress_tensor = OUTPUT_STRESS_TENSOR
-output_conformation_tensor = OUTPUT_CONFORMATION_TENSOR
-interp_type = BDRY_INTERP_TYPE
+  elem_order = ELEM_ORDER
 }
 
 VelocityInitialConditions {
@@ -404,7 +220,7 @@ Main {
 
 // visualization dump parameters
    viz_writer                  = "VisIt"
-   viz_dump_interval           = 800
+   viz_dump_interval           = 400
    viz_dump_dirname            = "visit"
    visit_number_procs_per_file = 1
 
@@ -454,19 +270,6 @@ TimerManager{
    print_total     = TRUE
    print_threshold = 0.1
    timer_list      = "IBAMR::*::*","IBTK::*::*","*::*::*"
-}
-AdvDiffSemiImplicitHierarchyIntegrator {
- start_time = START_TIME
- end_time = END_TIME
- grow_dt = GROW_DT
- num_cycles = ADV_DIFF_NUM_CYCLES
- convective_time_stepping_type = ADV_DIFF_CONVECTIVE_TS_TYPE
- convective_op_type = ADV_DIFF_CONVECTIVE_OP_TYPE
- convective_difference_form = ADV_DIFF_CONVECTIVE_FORM
- cfl = CFL_MAX
- dt_max = DT_MAX
- tag_buffer = TAG_BUFFER
- enable_logging = ENABLE_LOGGING
 }
 
 IBHierarchyIntegrator {
