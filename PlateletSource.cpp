@@ -192,7 +192,8 @@ PlateletSource::setDataOnPatch(const int data_idx,
         double w = (*w_data)(idx);
         // convolve phi_a*psi
         // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object.
-        const double eta_a = convolution(1.0, phi_a_data, 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx);
+        const double eta_a =
+            convolution(1.0, phi_a_data.getPointer(), 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx);
         // Compute the f^a_u
         (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * w * phi_u); // include f^a_u?
     }
