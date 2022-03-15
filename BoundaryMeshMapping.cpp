@@ -38,6 +38,7 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db)
     d_w_var = new CellVariable<NDIM, double>(d_object_name + "::w_var");
     auto var_db = VariableDatabase<NDIM>::getDatabase();
     d_w_idx = var_db->registerVariableAndContext(d_w_var, var_db->getContext(d_object_name + "::ctx"), /*ghosts*/ 4);
+    std::string order = input_db->getString("elem_order");
 
     unsigned int num_parts = d_vol_meshes.size();
     d_bdry_meshes.resize(num_parts);
@@ -81,11 +82,13 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db)
             d_object_name + "::FEData::" + std::to_string(part), *d_bdry_eq_sys_vec[part], true);
 
         auto& X_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_coords_sys_name);
-        for (unsigned int d = 0; d < NDIM; ++d) X_sys.add_variable("X_" + std::to_string(d), FEType());
+        for (unsigned int d = 0; d < NDIM; ++d)
+            X_sys.add_variable("X_" + std::to_string(d), FEType(libMesh::Utility::string_to_enum<Order>(order)));
         auto& dX_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_disp_sys_name);
-        for (unsigned int d = 0; d < NDIM; ++d) dX_sys.add_variable("dX_" + std::to_string(d), FEType());
+        for (unsigned int d = 0; d < NDIM; ++d)
+            dX_sys.add_variable("dX_" + std::to_string(d), FEType(libMesh::Utility::string_to_enum<Order>(order)));
         auto& W_sys = d_bdry_eq_sys_vec[part]->add_system<ExplicitSystem>(d_W_sys_name);
-        W_sys.add_variable("W", FEType());
+        W_sys.add_variable("W", FEType(libMesh::Utility::string_to_enum<Order>(order)));
         W_sys.assemble_before_solve = false;
         W_sys.assemble();
     }
@@ -148,6 +151,8 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t
             node_id_map.begin(), node_id_map.end(), [bdry_node_id](const std::pair<dof_id_type, dof_id_type>& obj) {
                 return obj.second == bdry_node_id;
             });
+        pout << "On boundary node " << *node << "\n";
+        pout << "Has volume node_id " << vol_iter->first << "\n";
         dof_id_type vol_node_id = vol_iter->first;
         // Grab current position of volumetric mesh.
         std::vector<dof_id_type> X_dof_indices, X_bdry_dof_indices;
@@ -155,6 +160,11 @@ BoundaryMeshMapping::updateBoundaryLocation(const double t_start, const double t
         {
             X_dof_map.dof_indices(d_vol_meshes[part]->node_ptr(vol_node_id), X_dof_indices, d);
             X_bdry_dof_map.dof_indices(node, X_bdry_dof_indices, d);
+            pout << "Num bdry dofs " << X_bdry_dof_indices.size() << "\n";
+            pout << "Num vol dofs  " << X_dof_indices.size() << "\n";
+            pout << "X_bdry dof " << X_bdry_dof_indices[0] << "\n";
+            pout << "X      dof " << X_dof_indices[0] << "\n";
+            pout << "X val      " << (*X_vec)(X_dof_indices[0]) << "\n";
             X_bdry_vec->set(X_bdry_dof_indices[0], (*X_vec)(X_dof_indices[0]));
             dX_bdry_vec->set(X_bdry_dof_indices[0], (*X_vec)(X_dof_indices[0]) - (*node)(d));
         }
