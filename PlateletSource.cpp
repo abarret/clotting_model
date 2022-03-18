@@ -24,11 +24,15 @@
 
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
-PlateletSource::PlateletSource(Pointer<Variable<NDIM>> phi_u_var,
+PlateletSource::PlateletSource(std::string object_name,
+                               Pointer<Variable<NDIM>> phi_u_var,
                                Pointer<Variable<NDIM>> phi_a_var,
                                Pointer<Database> input_db,
                                Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
-    : d_phi_u_var(phi_u_var), d_phi_a_var(phi_a_var), d_adv_diff_hier_integrator(adv_diff_hier_integrator)
+    : CartGridFunction(std::move(object_name)),
+      d_phi_u_var(phi_u_var),
+      d_phi_a_var(phi_a_var),
+      d_adv_diff_hier_integrator(adv_diff_hier_integrator)
 {
     // These need to be changed to the relevant parameters
     // a0 Constants

@@ -30,7 +30,8 @@ public:
     /*!
      * \brief Class constructor.
      */
-    PlateletSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+    PlateletSource(std::string object_name,
+                   SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
                    SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
