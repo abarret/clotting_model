@@ -1,5 +1,5 @@
 ADD_CUSTOM_TARGET(tests)
-SET(TEST_DIRECTORIES wall_pts fsi)
+SET(TEST_DIRECTORIES wall_pts fsi convolution)
 
 # Convienience macro that sets up a test
 MACRO(ADD_TEST)

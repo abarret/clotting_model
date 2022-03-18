@@ -399,8 +399,12 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_u_src_var = new CellVariable<NDIM, double>("phi_u_src");
         adv_diff_integrator->setAdvectionVelocity(phi_u_var, ins_integrator->getAdvectionVelocityVariable());
         adv_diff_integrator->setDiffusionCoefficient(phi_u_var, input_db->getDouble("UNACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_u_src_fcn = new PlateletSource(
-            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
+        Pointer<PlateletSource> phi_u_src_fcn =
+            new PlateletSource("UnactivatedPlatelets",
+                               phi_u_var,
+                               phi_a_var,
+                               app_initializer->getComponentDatabase("ActivatedPlatelets"),
+                               adv_diff_integrator);
         phi_u_src_fcn->setSign(false);
         phi_u_src_fcn->setKernel(BSPLINE_3);
         adv_diff_integrator->registerSourceTerm(phi_u_src_var);
@@ -418,8 +422,12 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
         adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
         adv_diff_integrator->setDiffusionCoefficient(phi_a_var, input_db->getDouble("ACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_a_src_fcn = new PlateletSource(
-            phi_u_var, phi_a_var, app_initializer->getComponentDatabase("ActivatedPlatelets"), adv_diff_integrator);
+        Pointer<PlateletSource> phi_a_src_fcn =
+            new PlateletSource("ActivatedPlatelets",
+                               phi_u_var,
+                               phi_a_var,
+                               app_initializer->getComponentDatabase("ActivatedPlatelets"),
+                               adv_diff_integrator);
         phi_a_src_fcn->setSign(true);
         phi_a_src_fcn->setKernel(BSPLINE_3);
         adv_diff_integrator->registerSourceTerm(phi_a_src_var);
@@ -500,6 +508,12 @@ main(int argc, char* argv[])
         plog << "Input database:\n";
         input_db->printClassData(plog);
 
+        // Drawing variable for spread activated platelets
+        Pointer<CellVariable<NDIM, double>> spread_phi_a = new CellVariable<NDIM, double>("phi_a_spread");
+        auto var_db = VariableDatabase<NDIM>::getDatabase();
+        const int spread_idx = var_db->registerVariableAndContext(spread_phi_a, var_db->getContext("Draw"));
+        visit_data_writer->registerPlotQuantity("convolution", "SCALAR", spread_idx);
+
         // Write out initial visualization data.
         int iteration_num = time_integrator->getIntegratorStep();
         double loop_time = time_integrator->getIntegratorTime();
@@ -508,8 +522,52 @@ main(int argc, char* argv[])
             pout << "\n\nWriting visualization files...\n\n";
             if (uses_visit)
             {
+                // Fill in convolution drawing variable
+                int phi_a_idx =
+                    var_db->mapVariableAndContextToIndex(phi_a_var, var_db->getContext("ActivatedPlatelets::ScrCtx"));
+                int phi_a_cur_idx =
+                    var_db->mapVariableAndContextToIndex(phi_a_var, adv_diff_integrator->getCurrentContext());
+                time_integrator->allocatePatchData(phi_a_idx, loop_time);
+                time_integrator->allocatePatchData(spread_idx, loop_time);
+                using ITC = HierarchyGhostCellInterpolation::InterpolationTransactionComponent;
+                ITC ghost_fill_component(phi_a_idx,
+                                         phi_a_cur_idx,
+                                         "CONSERVATIVE_LINEAR_REFINE",
+                                         false,
+                                         "CONSERVATIVE_COARSEN",
+                                         "LINEAR",
+                                         false,
+                                         adv_diff_integrator->getPhysicalBcCoefs(phi_a_var));
+                HierarchyGhostCellInterpolation ghost_fill_op;
+                ghost_fill_op.initializeOperatorState(
+                    ghost_fill_component, patch_hierarchy, 0, patch_hierarchy->getFinestLevelNumber());
+                ghost_fill_op.fillData(loop_time);
+                for (int ln = 0; ln <= patch_hierarchy->getFinestLevelNumber(); ++ln)
+                {
+                    Pointer<PatchLevel<NDIM>> level = patch_hierarchy->getPatchLevel(ln);
+                    for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+                    {
+                        Pointer<Patch<NDIM>> patch = level->getPatch(p());
+                        Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
+                        const double* const dx = pgeom->getDx();
+                        Pointer<CellData<NDIM, double>> spread_data = patch->getPatchData(spread_idx);
+                        Pointer<CellData<NDIM, double>> phi_a_data =
+                            patch->getPatchData(phi_a_var, var_db->getContext("ActivatedPlatelets::ScrCtx"));
+                        auto kernel = getKernelAndWidth(BSPLINE_3);
+                        for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
+                        {
+                            const CellIndex<NDIM>& idx = ci();
+                            (*spread_data)(idx) = convolution(
+                                1.0, phi_a_data.getPointer(), 0.0, nullptr, kernel.first, kernel.second, idx, dx);
+                        }
+                    }
+                }
+
                 time_integrator->setupPlotData();
                 visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+
+                time_integrator->deallocatePatchData(phi_a_idx);
+                time_integrator->deallocatePatchData(spread_idx);
             }
             if (uses_exodus)
             {
@@ -550,8 +608,52 @@ main(int argc, char* argv[])
                 pout << "\nWriting visualization files...\n\n";
                 if (uses_visit)
                 {
+                    // Fill in convolution drawing variable
+                    int phi_a_idx = var_db->mapVariableAndContextToIndex(
+                        phi_a_var, var_db->getContext("ActivatedPlatelets::ScrCtx"));
+                    int phi_a_cur_idx =
+                        var_db->mapVariableAndContextToIndex(phi_a_var, adv_diff_integrator->getCurrentContext());
+                    time_integrator->allocatePatchData(phi_a_idx, loop_time);
+                    time_integrator->allocatePatchData(spread_idx, loop_time);
+                    using ITC = HierarchyGhostCellInterpolation::InterpolationTransactionComponent;
+                    ITC ghost_fill_component(phi_a_idx,
+                                             phi_a_cur_idx,
+                                             "CONSERVATIVE_LINEAR_REFINE",
+                                             false,
+                                             "CONSERVATIVE_COARSEN",
+                                             "LINEAR",
+                                             false,
+                                             adv_diff_integrator->getPhysicalBcCoefs(phi_a_var));
+                    HierarchyGhostCellInterpolation ghost_fill_op;
+                    ghost_fill_op.initializeOperatorState(
+                        ghost_fill_component, patch_hierarchy, 0, patch_hierarchy->getFinestLevelNumber());
+                    ghost_fill_op.fillData(loop_time);
+                    for (int ln = 0; ln <= patch_hierarchy->getFinestLevelNumber(); ++ln)
+                    {
+                        Pointer<PatchLevel<NDIM>> level = patch_hierarchy->getPatchLevel(ln);
+                        for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+                        {
+                            Pointer<Patch<NDIM>> patch = level->getPatch(p());
+                            Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
+                            const double* const dx = pgeom->getDx();
+                            Pointer<CellData<NDIM, double>> spread_data = patch->getPatchData(spread_idx);
+                            Pointer<CellData<NDIM, double>> phi_a_data =
+                                patch->getPatchData(phi_a_var, var_db->getContext("ActivatedPlatelets::ScrCtx"));
+                            auto kernel = getKernelAndWidth(BSPLINE_3);
+                            for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
+                            {
+                                const CellIndex<NDIM>& idx = ci();
+                                (*spread_data)(idx) = convolution(
+                                    1.0, phi_a_data.getPointer(), 0.0, nullptr, kernel.first, kernel.second, idx, dx);
+                            }
+                        }
+                    }
+
                     time_integrator->setupPlotData();
                     visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+
+                    time_integrator->deallocatePatchData(phi_a_idx);
+                    time_integrator->deallocatePatchData(spread_idx);
                 }
                 if (uses_exodus)
                 {
