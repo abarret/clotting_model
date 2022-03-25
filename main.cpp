@@ -106,9 +106,9 @@ struct ClampVars
     Pointer<VariableContext> context;
     // Variables to clamp go here
     // if more are needed, make this an array
-    Pointer<Variable<NDIM>> phi_u_var;
-    Pointer<Variable<NDIM>> phi_a_var;
-    Pointer<Variable<NDIM>> bond_var;
+    Pointer<HIER::Variable<NDIM>> phi_u_var;
+    Pointer<HIER::Variable<NDIM>> phi_a_var;
+    Pointer<HIER::Variable<NDIM>> bond_var;
 };
 
 namespace ModelData
@@ -515,7 +515,7 @@ main(int argc, char* argv[])
             for (int ln = 0; ln <= clamp_vars->patch_hierarchy->getFinestLevelNumber(); ln++) {
                 auto level = clamp_vars->patch_hierarchy->getPatchLevel(ln);
                 // iterate patches
-                for (PatchLevel<NDIM>:Iterator p(level); p; p++) {
+                for (PatchLevel<NDIM>::Iterator p(level); p; p++) {
                     auto patch = level->getPatch(p());
                     // get patch data
                     Pointer<CellData<NDIM, double>> phi_u_data = patch->getPatchData(clamp_vars->phi_u_var, clamp_vars->context);
