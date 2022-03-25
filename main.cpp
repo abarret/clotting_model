@@ -99,6 +99,18 @@ beta_wrapper(const double eps, void* ctx)
     return beta_fcn->beta(eps);
 }
 
+// for now this is an amorphous blob
+struct ClampVars
+{
+    Pointer<PatchHierarchy<NDIM>> patch_hierarchy;
+    Pointer<VariableContext> context;
+    // Variables to clamp go here
+    // if more are needed, make this an array
+    Pointer<hier::Variable<NDIM>> phi_u_var;
+    Pointer<hier::Variable<NDIM>> phi_a_var;
+    Pointer<hier::Variable<NDIM>> bond_var;
+};
+
 namespace ModelData
 {
 static double kappa = 1.0e6;
@@ -484,6 +496,43 @@ main(int argc, char* argv[])
                                                                        static_cast<void*>(&bdry_mesh_mapping));
         time_integrator->registerRegridHierarchyCallback(regrid_callback, static_cast<void*>(&bdry_mesh_mapping));
         visit_data_writer->registerPlotQuantity("wall_sites", "SCALAR", w_idx);
+
+        // define variable blob, which stores the patch hierarchy, variable context, and clamped variables.
+        ClampVars clamp_vars = {
+            patch_hierarchy,                      // patch hierarchy
+            adv_diff_integrator->getNewContext(), // variable context
+            phi_u_var,                            // unactivated platelets var
+            phi_a_var,                            // activated platelets var
+            bond_var                              // bonds var
+        };
+        // Clamp cell values to 0 in callback
+        auto clamp_cell_values = [](const double /*current_time*/,
+                                   const double /*new_time*/,
+                                   int /*num_cycles*/,
+                                   void* ctx) {
+            auto clamp_vars = static_cast<ClampVars*>(ctx);
+            // iterate levels
+            for (int ln = 0; ln <= clamp_vars->patch_hierarchy->getFinestLevelNumber(); ln++) {
+                Pointer<PatchLevel<NDIM>> level = clamp_vars->patch_hierarchy->getPatchLevel(ln);
+                // iterate patches
+                for (PatchLevel<NDIM>::Iterator p(level); p; p++) {
+                    Pointer<Patch<NDIM>> patch = level->getPatch(p());
+                    // get patch data
+                    Pointer<CellData<NDIM, double>> phi_u_data = patch->getPatchData(clamp_vars->phi_u_var, clamp_vars->context);
+                    Pointer<CellData<NDIM, double>> phi_a_data = patch->getPatchData(clamp_vars->phi_a_var, clamp_vars->context);
+                    Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(clamp_vars->bond_var, clamp_vars->context);
+                    // iterate cells
+                    for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++) {
+                        const CellIndex<NDIM>& idx = ci();
+                        (*phi_u_data)(idx) = std::max((*phi_u_data)(idx), 0.0);
+                        (*phi_a_data)(idx) = std::max((*phi_a_data)(idx), 0.0);
+                        (*bond_data)(idx) = std::max((*bond_data)(idx), 0.0);
+                    }
+                }
+            }
+        };
+        // Register clamping callback
+        adv_diff_integrator->registerIntegrateHierarchyCallback(clamp_cell_values, static_cast<void*>(&clamp_vars));
 
         EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
