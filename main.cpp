@@ -599,15 +599,36 @@ main(int argc, char* argv[])
                         Pointer<Patch<NDIM>> patch = level->getPatch(p());
                         Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
                         const double* const dx = pgeom->getDx();
+                        const double* const xlow = pgeom->getDx();
+                        const hier::Index<NDIM>& idx_low = patch->getBox().lower();
                         Pointer<CellData<NDIM, double>> spread_data = patch->getPatchData(spread_idx);
                         Pointer<CellData<NDIM, double>> phi_a_data =
                             patch->getPatchData(phi_a_var, var_db->getContext("ActivatedPlatelets::ScrCtx"));
                         auto kernel = getKernelAndWidth(BSPLINE_3);
+                        std::array<VectorNd, 2> bdrys;
+                        bdrys[0](0) = -2.0;
+                        bdrys[0](1) = 0.0;
+                        bdrys[1](0) = 6.0;
+                        bdrys[1](1) = 2.0;
+
                         for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
                         {
                             const CellIndex<NDIM>& idx = ci();
                             (*spread_data)(idx) = convolution(
                                 1.0, phi_a_data.getPointer(), 0.0, nullptr, kernel.first, kernel.second, idx, dx);
+                            VectorNd x;
+                            for (unsigned int d = 0; d < NDIM; ++d)
+                                x[d] = xlow[d] + dx[d] * (static_cast<double>(idx(d) - idx_low(d)) + 0.5);
+                            (*spread_data)(idx) = convolution_mask(1.0,
+                                                                   phi_a_data.getPointer(),
+                                                                   0.0,
+                                                                   nullptr,
+                                                                   kernel.first,
+                                                                   kernel.second,
+                                                                   idx,
+                                                                   dx,
+                                                                   x,
+                                                                   bdrys);
                         }
                     }
                 }

@@ -61,7 +61,7 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db)
             // If this element has nodes on the bottom half of the cylinder, delete it.
             for (unsigned int n = 0; n < e->n_nodes(); ++n)
             {
-                if (e->node_ref(n)(1) < 0.0)
+                if (e->node_ref(n)(1) < 0.5)
                 {
                     d_bdry_meshes[part]->delete_elem(e);
                     break;
@@ -73,7 +73,7 @@ BoundaryMeshMapping::commonConstructor(Pointer<Database> input_db)
         {
             Node* n = *it;
             // If the node is on the bottom half of the cylinder, delete it.
-            if ((*n)(1) < 0.0) d_bdry_meshes[part]->delete_node(n);
+            if ((*n)(1) < 0.5) d_bdry_meshes[part]->delete_node(n);
         }
         d_bdry_meshes[part]->prepare_for_use();
         d_bdry_meshes[part]->print_info();
