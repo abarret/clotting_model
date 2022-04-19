@@ -31,7 +31,7 @@ CONVECTIVE_FORM    = "ADVECTIVE"          // how to compute the convective terms
 NORMALIZE_PRESSURE = FALSE                 // whether to explicitly force the pressure to have mean zero
 CFL_MAX            = 0.3                  // maximum CFL number
 U_MAX              = RE * MU / (RHO * RADIUS)
-DT_MAX = 0.1/4.0*DX * CFL_MAX / U_MAX
+DT_MAX = 0.25*DX * CFL_MAX / U_MAX
 DT_MIN = 0.1 * DT_MAX
 END_TIME = 50.0
 VORTICITY_TAGGING  = TRUE                // whether to tag cells for refinement based on vorticity thresholds
@@ -40,7 +40,7 @@ REGRID_CFL_INTERVAL    = 0.75
 ERROR_ON_DT_CHANGE = TRUE
 SPLIT_FORCES = FALSE
 USE_JUMP_CONDITIONS = FALSE
-USE_CONSISTENT_MASS_MATRIX = TRUE
+USE_CONSISTENT_MASS_MATRIX = FALSE
 IB_USE_NODAL_QUADRATURE = TRUE
 IB_POINT_DENSITY = 1.0
 IB_DELTA_FUNCTION = "BSPLINE_6"
@@ -52,13 +52,17 @@ OUTPUT_DIV_U       = TRUE
 ENABLE_LOGGING     = TRUE
 
 // Structural parameters
-KAPPA = 9.33837890625 * DX / DT_MAX / DT_MAX
-ETA = 0.873046875 * DX / DT_MAX
-BETA_S = 0.5*142.1875000*100.0
+KAPPA = 29.52550488335 * DX / DT_MAX / DT_MAX
+ETA = 8.8476185 * DX / DT_MAX
+BETA_S = 0.5*296.875000*1000.0
 ERROR_ON_MOVE = TRUE
 MFAC = 1.5
 ELEM_TYPE = "TRI3"
 ELEM_ORDER = "SECOND"
+
+Amplitude = 1.0
+Frequency = 4.0
+TIME_TO_START = 4.0
 
 BoundaryMesh {
   elem_order = ELEM_ORDER
