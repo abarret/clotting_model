@@ -61,6 +61,28 @@ static double eta = 0.0;
 static double beta_s = 1.0e3;
 static double dx = -1.0;
 static bool ERROR_ON_MOVE = false;
+
+double A = 1.0;
+double f = 1.0;
+double t_start = 0.0;
+libMesh::Point
+center(const double t)
+{
+    // Return the displacement of the center as a function of time.
+    libMesh::Point d;
+    if (t >= t_start) d(0) = A * std::sin(2.0 * M_PI * (t - t_start) / f);
+    return d;
+}
+
+VectorNd
+center_vel(const double t)
+{
+    // Return the derivative of the displacement
+    VectorNd d(VectorNd::Zero());
+    if (t >= t_start) d[0] = 2.0 * M_PI * A / f * std::cos(2.0 * M_PI * (t - t_start) / f);
+    return d;
+}
+
 void
 tether_force_function(VectorValue<double>& F,
                       const TensorValue<double>& /*FF*/,
@@ -69,17 +91,18 @@ tether_force_function(VectorValue<double>& F,
                       Elem* const /*elem*/,
                       const vector<const vector<double>*>& var_data,
                       const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
-                      double /*time*/,
+                      double time,
                       void* /*ctx*/)
 {
     // Tether to initial location using damped springs
     // x is current location
     // X is reference location
     // U is velocity
+    const libMesh::Point disp = center(time) + X;
     const std::vector<double>& U = *var_data[0];
-    for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (X(d) - x(d)) - eta * U[d];
+    for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (disp(d) - x(d)) - eta * (U[d] - center_vel(time)[d]);
     // Check to see how much structure has moved. If more than a quarter of a grid cell, quit.
-    std::vector<double> d = { std::abs(x(0) - X(0)), std::abs(x(1) - X(1)) };
+    std::vector<double> d = { std::abs(x(0) - disp(0)), std::abs(x(1) - disp(1)) };
     if (ERROR_ON_MOVE && ((d[0] > 0.25 * dx) || (d[1] > 0.25 * dx))) TBOX_ERROR("Structure has moved too much.\n");
 }
 
@@ -96,7 +119,7 @@ tether_penalty_stress_fcn(TensorValue<double>& PP,
 {
     const TensorValue<double> FF_inv_trans = tensor_inverse_transpose(FF, NDIM);
     double J = FF.det();
-    PP = beta_s * J * log(J) * FF_inv_trans;
+    PP = beta_s * log(J) * FF_inv_trans;
     return;
 }
 
@@ -298,6 +321,10 @@ main(int argc, char* argv[])
             }
             ins_integrator->registerPhysicalBoundaryConditions(u_bc_coefs);
         }
+
+        A = input_db->getDouble("Amplitude");
+        f = input_db->getDouble("Frequency");
+        t_start = input_db->getDouble("T_START");
 
         // Set up visualization plot file writers.
         Pointer<VisItDataWriter<NDIM>> visit_data_writer = app_initializer->getVisItDataWriter();
