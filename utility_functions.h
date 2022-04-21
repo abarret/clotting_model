@@ -31,6 +31,17 @@ double convolution(double alpha,
                    const SAMRAI::pdat::CellIndex<NDIM>& idx,
                    const double* const dx);
 
+double convolution_mask(double alpha,
+                        SAMRAI::pdat::CellData<NDIM, double>* a_data,
+                        double beta,
+                        SAMRAI::pdat::CellData<NDIM, double>* b_data,
+                        std::function<double(double)> phi,
+                        unsigned int phi_width,
+                        const SAMRAI::pdat::CellIndex<NDIM>& idx,
+                        const double* const dx,
+                        const VectorNd& x,
+                        const std::array<VectorNd, 2>& xbds);
+
 enum Kernel
 {
     BSPLINE_2,

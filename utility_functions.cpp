@@ -42,4 +42,25 @@ convolution(double alpha,
     }
     return convolve;
 }
+
+double
+convolution_mask(double alpha,
+                 CellData<NDIM, double>* a_data,
+                 double beta,
+                 CellData<NDIM, double>* b_data,
+                 std::function<double(double)> phi,
+                 unsigned int phi_width,
+                 const CellIndex<NDIM>& idx,
+                 const double* const dx,
+                 const VectorNd& x,
+                 const std::array<VectorNd, 2>& xbds)
+{
+    double convolve = convolution(alpha, a_data, beta, b_data, phi, phi_width, idx, dx);
+    // Now mask the convolution with a heaviside function.
+    // Determine if we are outside the box determined by xbds.
+    if ((x(0) < xbds[0](0) || x(0) > xbds[1](0)) || (x(1) < xbds[0](1) || x(1) > xbds[1](1)))
+        return 0.0;
+    else
+        return convolve;
+}
 } // namespace IBAMR

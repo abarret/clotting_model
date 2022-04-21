@@ -179,6 +179,13 @@ PlateletSource::setDataOnPatch(const int data_idx,
     if (initial_time) return;
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
     const double* const dx = pgeom->getDx();
+    const double* const xlow = pgeom->getXLower();
+
+    std::array<VectorNd, 2> bdrys;
+    bdrys[0](0) = -2.0;
+    bdrys[0](1) = 0.0;
+    bdrys[1](0) = 6.0;
+    bdrys[1](1) = 2.0;
     // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates
     // to **)
     Pointer<CellData<NDIM, double>> phi_a_data = patch->getPatchData(d_pl_scr_idx);
@@ -186,6 +193,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
         patch->getPatchData(d_phi_u_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
+    const hier::Index<NDIM>& idx_low = patch_box.lower();
     auto psi_fcn = IBAMR::getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
@@ -196,8 +204,13 @@ PlateletSource::setDataOnPatch(const int data_idx,
         double w = (*w_data)(idx);
         // convolve phi_a*psi
         // included w_data as the 4 arg since idk how to have an empty "const CellData<NDIM, double>&" object.
-        const double eta_a =
-            convolution(1.0, phi_a_data.getPointer(), 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx);
+        // const double eta_a =
+        //    convolution(1.0, phi_a_data.getPointer(), 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx);
+        VectorNd x;
+        for (unsigned int d = 0; d < NDIM; ++d)
+            x[d] = xlow[d] + dx[d] * (static_cast<double>(idx(d) - idx_low(d)) + 0.5);
+        const double eta_a = convolution_mask(
+            1.0, phi_a_data.getPointer(), 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx, x, bdrys);
         // Compute the f^a_u
         (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * w * phi_u); // include f^a_u?
     }
