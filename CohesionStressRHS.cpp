@@ -141,8 +141,10 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
                                   Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     const Box<NDIM>& patch_box = patch->getBox();
-    // Pointer<CartesianPatchGeometry<NDIM> > pgeom = patch->getPatchGeometry();
-    // const double* const dx = pgeom->getDx();
+    Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
+    const double* const dx = pgeom->getDx();
+    const double* const xlow = pgeom->getXLower();
+    const hier::Index<NDIM>& idx_low = patch_box.lower();
     // SET THE INDICES!!!!
     Pointer<CellData<NDIM, double>> ret_data = patch->getPatchData(data_idx);
     Pointer<CellData<NDIM, double>> in_data = patch->getPatchData(d_W_cc_idx); // this is sigma?
@@ -158,6 +160,8 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
     for (CellIterator<NDIM> i(patch_box); i; i++)
     {
         const CellIndex<NDIM>& idx = i();
+        VectorNd x;
+        for (int d = 0; d < NDIM; ++d) x[d] = xlow[d] + dx[d] * (static_cast<double>(idx(d) - idx_low(d)) + 0.5);
         // Compute the ODE terms for stress here
         // C4 * alpha * I - beta * sigma
         // compute R2 and R4 -> alpha
@@ -176,7 +180,8 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
 #if (NDIM == 2)
         const double trace = (*in_data)(idx, 0) + (*in_data)(idx, 1);
         const double y_brackets = trace / (z + 1.0e-8);
-        const double beta = d_beta_fcn(y_brackets);
+        double beta = d_beta_fcn(y_brackets);
+        if (x[0] > 2.25) beta = 300.0;
 
         (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*in_data)(idx, 0);
         (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*in_data)(idx, 1);
