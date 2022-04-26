@@ -43,6 +43,8 @@ CohesionStressRHS::CohesionStressRHS(Pointer<Variable<NDIM>> phi_u_var,
     // a0 Constants
     d_a0 = input_db->getDouble("a0");
     d_a0w = input_db->getDouble("a0w");
+    d_beta_limit = input_db->getDoubleWithDefault("beta_limit", 300.0);
+    d_clot_break_x = input_db->getDoubleWithDefault("clot_break_x", 2.25);
     return;
 } // Constructor
 
@@ -181,7 +183,7 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
         const double trace = (*in_data)(idx, 0) + (*in_data)(idx, 1);
         const double y_brackets = trace / (z + 1.0e-8);
         double beta = d_beta_fcn(y_brackets);
-        if (x[0] > 2.25) beta = 300.0;
+        if (x[0] > d_clot_break_x) beta = d_beta_limit;
 
         (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*in_data)(idx, 0);
         (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*in_data)(idx, 1);

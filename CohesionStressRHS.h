@@ -132,6 +132,11 @@ private:
     double d_a0 = std::numeric_limits<double>::quiet_NaN();
     double d_a0w = std::numeric_limits<double>::quiet_NaN();
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var;
+
+    // When X is greater than d_clot_break_x, set beta equal to d_beta_limit;
+    double d_clot_break_x = std::numeric_limits<double>::quiet_NaN();
+    double d_beta_limit = std::numeric_limits<double>::quiet_NaN();
+
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
 

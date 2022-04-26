@@ -43,6 +43,8 @@ KUA = 2.0
 KUW = 2.0
 WMAX = 1.0
 PL_U_IN = 1.0
+CLOT_BREAK_X = 2.25
+BETA_LIMIT = 300.0
 
 // solver parameters
 NORMALIZE_VELOCITY = FALSE
@@ -119,6 +121,8 @@ BondVariable {
   a0 = A0
   a0w = A0W
   wmax = WMAX
+  clot_break_x = CLOT_BREAK_X
+  beta_limit = BETA_LIMIT
 }
 
 CohesionRHS {
@@ -126,6 +130,8 @@ CohesionRHS {
   a0 = A0
   a0w = A0W
   wmax = WMAX
+  clot_break_x = CLOT_BREAK_X
+  beta_limit = BETA_LIMIT
 }
 
 BoundaryMesh {
