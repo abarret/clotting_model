@@ -182,6 +182,9 @@ tether_penalty_stress_fcn(TensorValue<double>& PP,
 } // namespace ModelData
 using namespace ModelData;
 
+static std::ofstream force_stream;
+void output_net_force(EquationSystems* eq_sys, const double loop_time);
+
 /*******************************************************************************
  * For each run, the input filename and restart information (if needed) must   *
  * be given on the command line.  For non-restarted case, command line is:     *
@@ -670,6 +673,12 @@ main(int argc, char* argv[])
             {
                 exodus_io->write_timestep(exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
             }
+
+            // Open streams to output forces
+            if (IBTK_MPI::getRank() == 0)
+            {
+                force_stream.open("Force.curve", ios_base::out | ios_base::trunc);
+            }
         }
 
         // Main time step loop.
@@ -757,6 +766,8 @@ main(int argc, char* argv[])
                     exodus_io->write_timestep(
                         exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
                 }
+
+                output_net_force(eq_sys, loop_time);
             }
             if (dump_restart_data && (iteration_num % restart_dump_interval == 0 || last_step))
             {
@@ -773,6 +784,12 @@ main(int argc, char* argv[])
             {
                 output_data(patch_hierarchy, time_integrator, iteration_num, loop_time, postproc_data_dump_dirname);
             }
+        }
+
+        // Close the force stream
+        if (IBTK_MPI::getRank() == 0)
+        {
+            force_stream.close();
         }
 
     } // cleanup dynamically allocated objects prior to shutdown
@@ -805,3 +822,55 @@ output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
     hier_db->close();
     return;
 } // output_data
+
+void
+output_net_force(EquationSystems* eq_sys, const double loop_time)
+{
+    const MeshBase& mesh = eq_sys->get_mesh();
+    const unsigned int dim = mesh.mesh_dimension();
+
+    VectorNd F_int(VectorNd::Zero());
+
+    System& F_sys = eq_sys->get_system(IBFEMethod::FORCE_SYSTEM_NAME);
+    const DofMap& dof_map = F_sys.get_dof_map();
+    NumericVector<double>* F_vec = F_sys.current_local_solution.get();
+
+    std::unique_ptr<FEBase> fe(FEBase::build(dim, dof_map.variable_type(0)));
+    std::unique_ptr<QBase> qrule = QBase::build(QGAUSS, dim, SEVENTH);
+    fe->attach_quadrature_rule(qrule.get());
+    const std::vector<double>& JxW = fe->get_JxW();
+    const std::vector<std::vector<double>>& phi = fe->get_phi();
+
+    std::vector<std::vector<dof_id_type>> dof_indices(NDIM);
+    boost::multi_array<double, 2> F_node;
+    const MeshBase::const_element_iterator el_begin = mesh.active_local_elements_begin();
+    const MeshBase::const_element_iterator el_end = mesh.active_elements_end();
+    for (MeshBase::const_element_iterator el_it = el_begin; el_it != el_end; ++el_it)
+    {
+        const Elem* const elem = *el_it;
+        fe->reinit(elem);
+        for (unsigned int d = 0; d < NDIM; ++d) dof_map.dof_indices(elem, dof_indices[d], d);
+        const int n_qp = qrule->n_points();
+        const int n_basis = static_cast<int>(dof_indices[0].size());
+        get_values_for_interpolation(F_node, *F_vec, dof_indices);
+        for (int qp = 0; qp < n_qp; ++qp)
+        {
+            for (int k = 0; k < n_basis; ++k)
+            {
+                for (int d = 0; d < NDIM; ++d)
+                {
+                    F_int[d] += F_node[k][d] * phi[k][qp] * JxW[qp];
+                }
+            }
+        }
+    }
+
+    IBTK_MPI::sumReduction(F_int.data(), NDIM);
+    if (IBTK_MPI::getRank() == 0)
+    {
+        // Output forces
+        force_stream.precision(12);
+        force_stream.setf(ios::fixed, ios::floatfield);
+        force_stream << loop_time << " " << -F_int[0] << " " << -F_int[1] << "\n";
+    }
+}
