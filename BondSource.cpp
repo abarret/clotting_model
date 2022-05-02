@@ -38,6 +38,8 @@ BondSource::BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u
     // init db vars
     d_a0 = input_db->getDouble("a0");
     d_a0w = input_db->getDouble("a0w");
+    d_beta_limit = input_db->getDoubleWithDefault("beta_limit", 300.0);
+    d_clot_break_x = input_db->getDoubleWithDefault("clot_break_x", 2.25);
 } // BondSource
 
 bool
@@ -158,11 +160,17 @@ BondSource::setDataOnPatch(const int data_idx,
         patch->getPatchData(d_sig_var, d_adv_diff_hier_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
+    Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
+    const double* const dx = pgeom->getDx();
+    const double* const xlow = pgeom->getXLower();
+    const hier::Index<NDIM>& idx_low = patch_box.lower();
     // begin cell loop
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         // grab the index
         const CellIndex<NDIM>& idx = ci();
+        VectorNd x;
+        for (int d = 0; d < NDIM; ++d) x[d] = xlow[d] + dx[d] * (static_cast<double>(idx(d) - idx_low(d)) + 0.5);
         // grab the var values w/ the index
         double phi_u = (*phi_u_data)(idx);
         double phi_a = (*phi_a_data)(idx);
@@ -174,6 +182,7 @@ BondSource::setDataOnPatch(const int data_idx,
         const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1);
         const double y_brackets = trace / (z + 1.0e-8);
         double beta = d_beta_fcn(y_brackets);
+        if (x[0] > d_clot_break_x) beta = d_beta_limit;
 #endif
 #if (NDIM == 3)
         const double trace = (*sig_data)(idx, 0) + (*sig_data)(idx, 1) + (*sig_data)(idx, 2);

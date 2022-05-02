@@ -97,6 +97,10 @@ private:
     double d_a0 = std::numeric_limits<double>::quiet_NaN();
     double d_a0w = std::numeric_limits<double>::quiet_NaN();
 
+    // When X is greater than d_clot_break_x, set beta equal to d_beta_limit;
+    double d_clot_break_x = std::numeric_limits<double>::quiet_NaN();
+    double d_beta_limit = std::numeric_limits<double>::quiet_NaN();
+
     // wall index
     int d_w_idx = IBTK::invalid_index;
 
