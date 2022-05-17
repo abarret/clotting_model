@@ -6,7 +6,7 @@ LX = 32.0
 LY = 4.0
 RATIO = LX / LY
 RE = 100.0
-P_INLET = 12.5
+P_INLET = 5.0
 RADIUS = 1.0
 
 // grid spacing parameters
@@ -33,13 +33,17 @@ CFL_MAX            = 0.3                  // maximum CFL number
 U_MAX              = RE * MU / (RHO * RADIUS)
 DT_MAX = 0.25*DX * CFL_MAX / U_MAX
 DT_MIN = 0.1 * DT_MAX
-END_TIME = 50.0
+END_TIME = 100.0
 VORTICITY_TAGGING  = TRUE                // whether to tag cells for refinement based on vorticity thresholds
 TAG_BUFFER         = 3                    // sized of tag buffer used by grid generation algorithm
 REGRID_CFL_INTERVAL    = 0.75
 ERROR_ON_DT_CHANGE = TRUE
 SPLIT_FORCES = FALSE
-USE_JUMP_CONDITIONS = FALSE
+USE_PRESSURE_JUMP_CONDITIONS = TRUE
+USE_VELOCITY_JUMP_CONDITIONS = TRUE
+COMPUTE_FLUID_TRACTION       = TRUE
+WSS_CALC_WIDTH               = 1.05
+P_CALC_WIDTH                 = 1.3
 USE_CONSISTENT_MASS_MATRIX = FALSE
 IB_USE_NODAL_QUADRATURE = TRUE
 IB_POINT_DENSITY = 1.0
@@ -52,17 +56,16 @@ OUTPUT_DIV_U       = TRUE
 ENABLE_LOGGING     = TRUE
 
 // Structural parameters
-KAPPA = 29.52550488335 * DX / DT_MAX / DT_MAX
-ETA = 8.8476185 * DX / DT_MAX
-BETA_S = 0.5*296.875000*1000.0
-ERROR_ON_MOVE = TRUE
+KAPPA = 1000.0
+ETA = 1.25
+ERROR_ON_MOVE = FALSE
 MFAC = 1.5
 ELEM_TYPE = "TRI3"
-ELEM_ORDER = "SECOND"
+ELEM_ORDER = "FIRST"
 
 Amplitude = 1.0
 Frequency = 4.0
-TIME_TO_START = 4.0
+T_START = 10000.0
 
 BoundaryMesh {
   elem_order = ELEM_ORDER
@@ -288,9 +291,21 @@ IBHierarchyIntegrator {
    enable_logging      = ENABLE_LOGGING
 }
 
+IIMethod {
+   IB_delta_fcn                 = IB_DELTA_FUNCTION
+   split_forces                 = SPLIT_FORCES
+   use_pressure_jump_conditions = USE_PRESSURE_JUMP_CONDITIONS
+   use_velocity_jump_conditions = USE_VELOCITY_JUMP_CONDITIONS
+   use_consistent_mass_matrix   = USE_CONSISTENT_MASS_MATRIX
+   IB_point_density             = IB_POINT_DENSITY
+   p_calc_width                 = P_CALC_WIDTH
+   wss_calc_width               = WSS_CALC_WIDTH
+   compute_fluid_traction       = COMPUTE_FLUID_TRACTION
+   min_ghost_cell_width         = 6
+}
+
 IBFEMethod {
    split_forces                  = SPLIT_FORCES
-   use_jump_conditions           = USE_JUMP_CONDITIONS
    use_consistent_mass_matrix    = USE_CONSISTENT_MASS_MATRIX
    IB_use_consistent_mass_matrix = USE_CONSISTENT_MASS_MATRIX
    IB_use_nodal_quadrature       = IB_USE_NODAL_QUADRATURE

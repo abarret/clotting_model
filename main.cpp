@@ -17,7 +17,7 @@
 #include <ibamr/AdvDiffSemiImplicitHierarchyIntegrator.h>
 #include <ibamr/CFINSForcing.h>
 #include <ibamr/IBExplicitHierarchyIntegrator.h>
-#include <ibamr/IBFEMethod.h>
+#include <ibamr/IIMethod.h>
 #include <ibamr/INSCollocatedHierarchyIntegrator.h>
 #include <ibamr/INSStaggeredHierarchyIntegrator.h>
 #include <ibamr/app_namespaces.h>
@@ -136,53 +136,34 @@ namespace ModelData
 {
 static double kappa = 1.0e6;
 static double eta = 0.0;
-static double beta_s = 1.0e3;
 static double dx = -1.0;
 static bool ERROR_ON_MOVE = false;
+
 void
 tether_force_function(VectorValue<double>& F,
+                      const VectorValue<double>& /*n*/,
+                      const VectorValue<double>& /*N*/,
                       const TensorValue<double>& /*FF*/,
                       const libMesh::Point& x,
                       const libMesh::Point& X,
                       Elem* const /*elem*/,
-                      const vector<const vector<double>*>& var_data,
-                      const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
+                      const unsigned short /*side*/,
+                      const std::vector<const std::vector<double>*>& var_data,
+                      const std::vector<const std::vector<VectorValue<double>>*>& /*grad_var_data*/,
                       double time,
                       void* /*ctx*/)
 {
-    // Tether to initial location using damped springs
-    // x is current location
-    // X is reference location
-    // U is velocity
-    const libMesh::Point disp = center(time) + X;
     const std::vector<double>& U = *var_data[0];
+    const libMesh::Point disp = center(time) + X;
     for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (disp(d) - x(d)) - eta * (U[d] - center_vel(time)[d]);
-    // Check to see how much structure has moved. If more than a quarter of a grid cell, quit.
-    std::vector<double> d = { std::abs(x(0) - disp(0)), std::abs(x(1) - disp(1)) };
-    if (ERROR_ON_MOVE && ((d[0] > 0.25 * dx) || (d[1] > 0.25 * dx))) TBOX_ERROR("Structure has moved too much.\n");
-}
-
-void
-tether_penalty_stress_fcn(TensorValue<double>& PP,
-                          const TensorValue<double>& FF,
-                          const libMesh::Point& /*X*/,
-                          const libMesh::Point& /*s*/,
-                          Elem* const /*elem*/,
-                          const vector<const vector<double>*>& /*var_data*/,
-                          const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
-                          double /*time*/,
-                          void* ctx)
-{
-    const TensorValue<double> FF_inv_trans = tensor_inverse_transpose(FF, NDIM);
-    double J = FF.det();
-    PP = beta_s * log(J) * FF_inv_trans;
-    return;
+    VectorValue<double> d = disp - x;
+    if (ERROR_ON_MOVE && d.norm() > 0.25 * dx) TBOX_ERROR("Structure has moved too much.\n");
 }
 
 } // namespace ModelData
 using namespace ModelData;
 
-static std::ofstream force_stream;
+static std::ofstream force_stream, tether_stream;
 void output_net_force(EquationSystems* eq_sys, const double loop_time);
 
 /*******************************************************************************
@@ -301,7 +282,12 @@ main(int argc, char* argv[])
         solid_mesh.prepare_for_use();
         solid_mesh.print_info();
 
-        Mesh& mesh = solid_mesh;
+        BoundaryMesh bdry_mesh(solid_mesh.comm(), solid_mesh.mesh_dimension() - 1);
+        BoundaryInfo& bdry_info = solid_mesh.get_boundary_info();
+        bdry_info.sync(bdry_mesh);
+        bdry_mesh.prepare_for_use();
+
+        MeshBase& mesh = bdry_mesh;
 
         // Get structure parameters
         kappa = input_db->getDouble("KAPPA");
@@ -317,14 +303,11 @@ main(int argc, char* argv[])
         adv_diff_integrator = new AdvDiffSemiImplicitHierarchyIntegrator(
             "AdvDiffSemiImplicitHierarchyIntegrator",
             app_initializer->getComponentDatabase("AdvDiffSemiImplicitHierarchyIntegrator"));
-        Pointer<IBFEMethod> ib_method_ops =
-            new IBFEMethod("IBFEMethod",
-                           app_initializer->getComponentDatabase("IBFEMethod"),
-                           &mesh,
-                           app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"),
-                           true,
-                           app_initializer->getRestartReadDirectory(),
-                           app_initializer->getRestartRestoreNumber());
+        Pointer<IIMethod> ib_method_ops =
+            new IIMethod("IIMethod",
+                         app_initializer->getComponentDatabase("IIMethod"),
+                         &mesh,
+                         app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"));
         Pointer<IBHierarchyIntegrator> time_integrator =
             new IBExplicitHierarchyIntegrator("IBHierarchyIntegrator",
                                               app_initializer->getComponentDatabase("IBHierarchyIntegrator"),
@@ -359,11 +342,9 @@ main(int argc, char* argv[])
         ib_method_ops->initializeFEEquationSystems();
         std::vector<int> vars(NDIM);
         for (unsigned int d = 0; d < NDIM; ++d) vars[d] = d;
-        std::vector<SystemData> sys_data = { SystemData(IBFEMethod::VELOCITY_SYSTEM_NAME, vars) };
-        IBFEMethod::LagBodyForceFcnData body_fcn_data(tether_force_function, sys_data);
-        ib_method_ops->registerLagBodyForceFunction(body_fcn_data);
-        beta_s = input_db->getDouble("BETA_S");
-        ib_method_ops->registerPK1StressFunction(tether_penalty_stress_fcn);
+        std::vector<SystemData> sys_data = { SystemData(IIMethod::VELOCITY_SYSTEM_NAME, vars) };
+        IIMethod::LagSurfaceForceFcnData surface_fcn_data(tether_force_function, sys_data);
+        ib_method_ops->registerLagSurfaceForceFunction(surface_fcn_data);
 
         // Create boundary condition specification objects (when necessary).
         const IntVector<NDIM>& periodic_shift = grid_geometry->getPeriodicShift();
@@ -503,9 +484,9 @@ main(int argc, char* argv[])
         adv_diff_integrator->setPhysicalBcCoef(bond_var, bond_bcs.getPointer());
 
         // Wall sites
-        FEDataManager* vol_data_manager = ib_method_ops->getFEDataManager();
+        FEDataManager* fe_data_manager = ib_method_ops->getFEDataManager();
         BoundaryMeshMapping bdry_mesh_mapping(
-            "BoundaryMesh", app_initializer->getComponentDatabase("BoundaryMesh"), &mesh, vol_data_manager);
+            "BoundaryMesh", app_initializer->getComponentDatabase("BoundaryMesh"), &mesh, fe_data_manager);
         const int w_idx = bdry_mesh_mapping.getWallSitesPatchIndex();
         auto update_bdry_mesh = [](const double current_time,
                                    const double new_time,
@@ -536,36 +517,41 @@ main(int argc, char* argv[])
             bond_var                              // bonds var
         };
         // Clamp cell values to 0 in callback
-        auto clamp_cell_values = [](const double /*current_time*/,
-                                   const double /*new_time*/,
-                                   int /*num_cycles*/,
-                                   void* ctx) {
-            auto clamp_vars = static_cast<ClampVars*>(ctx);
-            // iterate levels
-            for (int ln = 0; ln <= clamp_vars->patch_hierarchy->getFinestLevelNumber(); ln++) {
-                Pointer<PatchLevel<NDIM>> level = clamp_vars->patch_hierarchy->getPatchLevel(ln);
-                // iterate patches
-                for (PatchLevel<NDIM>::Iterator p(level); p; p++) {
-                    Pointer<Patch<NDIM>> patch = level->getPatch(p());
-                    // get patch data
-                    Pointer<CellData<NDIM, double>> phi_u_data = patch->getPatchData(clamp_vars->phi_u_var, clamp_vars->context);
-                    Pointer<CellData<NDIM, double>> phi_a_data = patch->getPatchData(clamp_vars->phi_a_var, clamp_vars->context);
-                    Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(clamp_vars->bond_var, clamp_vars->context);
-                    // iterate cells
-                    for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++) {
-                        const CellIndex<NDIM>& idx = ci();
-                        (*phi_u_data)(idx) = std::max((*phi_u_data)(idx), 0.0);
-                        (*phi_a_data)(idx) = std::max((*phi_a_data)(idx), 0.0);
-                        (*bond_data)(idx) = std::max((*bond_data)(idx), 0.0);
+        auto clamp_cell_values =
+            [](const double /*current_time*/, const double /*new_time*/, int /*num_cycles*/, void* ctx) {
+                auto clamp_vars = static_cast<ClampVars*>(ctx);
+                // iterate levels
+                for (int ln = 0; ln <= clamp_vars->patch_hierarchy->getFinestLevelNumber(); ln++)
+                {
+                    Pointer<PatchLevel<NDIM>> level = clamp_vars->patch_hierarchy->getPatchLevel(ln);
+                    // iterate patches
+                    for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+                    {
+                        Pointer<Patch<NDIM>> patch = level->getPatch(p());
+                        // get patch data
+                        Pointer<CellData<NDIM, double>> phi_u_data =
+                            patch->getPatchData(clamp_vars->phi_u_var, clamp_vars->context);
+                        Pointer<CellData<NDIM, double>> phi_a_data =
+                            patch->getPatchData(clamp_vars->phi_a_var, clamp_vars->context);
+                        Pointer<CellData<NDIM, double>> bond_data =
+                            patch->getPatchData(clamp_vars->bond_var, clamp_vars->context);
+                        // iterate cells
+                        for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
+                        {
+                            const CellIndex<NDIM>& idx = ci();
+                            (*phi_u_data)(idx) = std::max((*phi_u_data)(idx), 0.0);
+                            (*phi_a_data)(idx) = std::max((*phi_a_data)(idx), 0.0);
+                            (*bond_data)(idx) = std::max((*bond_data)(idx), 0.0);
+                        }
                     }
                 }
-            }
-        };
+            };
         // Register clamping callback
         adv_diff_integrator->registerIntegrateHierarchyCallback(clamp_cell_values, static_cast<void*>(&clamp_vars));
 
-        EquationSystems* eq_sys = ib_method_ops->getFEDataManager()->getEquationSystems();
+        EquationSystems* eq_sys = fe_data_manager->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
+        //        std::unique_ptr<ExodusII_IO> bdry_io(new ExodusII_IO(*meshes[1]));
         bool from_restart = RestartManager::getManager()->isFromRestart();
         if (exodus_io) exodus_io->append(from_restart);
 
@@ -672,12 +658,15 @@ main(int argc, char* argv[])
             if (uses_exodus)
             {
                 exodus_io->write_timestep(exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                //                bdry_io->write_timestep("bdry.ex2", *upper_data_manager, iteration_num /
+                //                viz_dump_interval + 1, loop_time);
             }
 
             // Open streams to output forces
             if (IBTK_MPI::getRank() == 0)
             {
                 force_stream.open("Force.curve", ios_base::out | ios_base::trunc);
+                tether_stream.open("Tether_Force.curve", ios_base::out | ios_base::trunc);
             }
         }
 
@@ -765,6 +754,8 @@ main(int argc, char* argv[])
                 {
                     exodus_io->write_timestep(
                         exodus_filename, *eq_sys, iteration_num / viz_dump_interval + 1, loop_time);
+                    //                    bdry_io->write_timestep("bdry.ex2", *upper_data_manager, iteration_num /
+                    //                    viz_dump_interval + 1, loop_time);
                 }
 
                 output_net_force(eq_sys, loop_time);
@@ -790,6 +781,7 @@ main(int argc, char* argv[])
         if (IBTK_MPI::getRank() == 0)
         {
             force_stream.close();
+            tether_stream.close();
         }
 
     } // cleanup dynamically allocated objects prior to shutdown
@@ -824,53 +816,90 @@ output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
 } // output_data
 
 void
-output_net_force(EquationSystems* eq_sys, const double loop_time)
+output_net_force(EquationSystems* equation_systems, const double loop_time)
 {
-    const MeshBase& mesh = eq_sys->get_mesh();
+    const MeshBase& mesh = equation_systems->get_mesh();
     const unsigned int dim = mesh.mesh_dimension();
+    double F_integral[NDIM];
+    double T_integral[NDIM];
+    for (unsigned int d = 0; d < NDIM; ++d)
+    {
+        F_integral[d] = 0.0;
+        T_integral[d] = 0.0;
+    }
+    System* x_system;
+    System* U_system;
 
-    VectorNd F_int(VectorNd::Zero());
+    x_system = &equation_systems->get_system(IIMethod::COORDS_SYSTEM_NAME);
+    U_system = &equation_systems->get_system(IIMethod::VELOCITY_SYSTEM_NAME);
+    NumericVector<double>* x_vec = x_system->solution.get();
+    NumericVector<double>* x_ghost_vec = x_system->current_local_solution.get();
+    x_vec->localize(*x_ghost_vec);
+    NumericVector<double>* U_vec = U_system->solution.get();
+    NumericVector<double>* U_ghost_vec = U_system->current_local_solution.get();
+    U_vec->localize(*U_ghost_vec);
+    const DofMap& dof_map = x_system->get_dof_map();
+    std::vector<std::vector<unsigned int>> dof_indices(NDIM);
 
-    System& F_sys = eq_sys->get_system(IBFEMethod::FORCE_SYSTEM_NAME);
-    const DofMap& dof_map = F_sys.get_dof_map();
-    NumericVector<double>* F_vec = F_sys.current_local_solution.get();
+    NumericVector<double>& X_vec = x_system->get_vector("INITIAL_COORDINATES");
+
+    std::vector<std::vector<unsigned int>> WSS_o_dof_indices(NDIM);
 
     std::unique_ptr<FEBase> fe(FEBase::build(dim, dof_map.variable_type(0)));
     std::unique_ptr<QBase> qrule = QBase::build(QGAUSS, dim, SEVENTH);
     fe->attach_quadrature_rule(qrule.get());
-    const std::vector<double>& JxW = fe->get_JxW();
-    const std::vector<std::vector<double>>& phi = fe->get_phi();
+    const vector<double>& JxW = fe->get_JxW();
+    const vector<vector<double>>& phi = fe->get_phi();
+    const vector<vector<VectorValue<double>>>& dphi = fe->get_dphi();
 
-    std::vector<std::vector<dof_id_type>> dof_indices(NDIM);
-    boost::multi_array<double, 2> F_node;
+    std::vector<double> U_qp_vec(NDIM);
+    std::vector<const std::vector<double>*> var_data(1);
+    var_data[0] = &U_qp_vec;
+    std::vector<const std::vector<libMesh::VectorValue<double>>*> grad_var_data;
+
+    TensorValue<double> FF, FF_inv_trans;
+    boost::multi_array<double, 2> x_node, X_node, U_node, TAU_node;
+
+    VectorValue<double> F, N, U, n, x, X, TAU;
+
     const MeshBase::const_element_iterator el_begin = mesh.active_local_elements_begin();
-    const MeshBase::const_element_iterator el_end = mesh.active_elements_end();
+    const MeshBase::const_element_iterator el_end = mesh.active_local_elements_end();
     for (MeshBase::const_element_iterator el_it = el_begin; el_it != el_end; ++el_it)
     {
-        const Elem* const elem = *el_it;
+        Elem* const elem = *el_it;
         fe->reinit(elem);
-        for (unsigned int d = 0; d < NDIM; ++d) dof_map.dof_indices(elem, dof_indices[d], d);
-        const int n_qp = qrule->n_points();
-        const int n_basis = static_cast<int>(dof_indices[0].size());
-        get_values_for_interpolation(F_node, *F_vec, dof_indices);
-        for (int qp = 0; qp < n_qp; ++qp)
+        for (unsigned int d = 0; d < NDIM; ++d)
         {
-            for (int k = 0; k < n_basis; ++k)
+            dof_map.dof_indices(elem, dof_indices[d], d);
+        }
+        get_values_for_interpolation(x_node, *x_ghost_vec, dof_indices);
+        get_values_for_interpolation(U_node, *U_ghost_vec, dof_indices);
+        get_values_for_interpolation(X_node, X_vec, dof_indices);
+
+        const unsigned int n_qp = qrule->n_points();
+        for (unsigned int qp = 0; qp < n_qp; ++qp)
+        {
+            interpolate(X, qp, X_node, phi);
+            interpolate(x, qp, x_node, phi);
+            jacobian(FF, qp, x_node, dphi);
+            interpolate(U, qp, U_node, phi);
+            for (unsigned int d = 0; d < NDIM; ++d)
             {
-                for (int d = 0; d < NDIM; ++d)
-                {
-                    F_int[d] += F_node[k][d] * phi[k][qp] * JxW[qp];
-                }
+                U_qp_vec[d] = U(d);
+            }
+            tether_force_function(F, n, N, FF, x, X, elem, 0, var_data, grad_var_data, loop_time, nullptr);
+
+            for (int d = 0; d < NDIM; ++d)
+            {
+                F_integral[d] += F(d) * JxW[qp];
             }
         }
     }
-
-    IBTK_MPI::sumReduction(F_int.data(), NDIM);
-    if (IBTK_MPI::getRank() == 0)
+    SAMRAI_MPI::sumReduction(F_integral, NDIM);
+    SAMRAI_MPI::sumReduction(T_integral, NDIM);
+    if (SAMRAI_MPI::getRank() == 0)
     {
-        // Output forces
-        force_stream.precision(12);
-        force_stream.setf(ios::fixed, ios::floatfield);
-        force_stream << loop_time << " " << -F_int[0] << " " << -F_int[1] << "\n";
+        force_stream << loop_time << " " << -F_integral[0] << " " << -F_integral[1] << "\n";
     }
-}
+    return;
+} // postprocess_data
