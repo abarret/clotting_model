@@ -59,7 +59,7 @@ CONVECTIVE_FORM    = "ADVECTIVE"          // how to compute the convective terms
 NORMALIZE_PRESSURE = FALSE                 // whether to explicitly force the pressure to have mean zero
 CFL_MAX            = 0.3                  // maximum CFL number
 U_MAX              = RE * MU / (RHO * RADIUS)
-DT_MAX = 0.25*DX * CFL_MAX / U_MAX
+DT_MAX = 0.1 * DX * CFL_MAX / U_MAX
 DT_MIN = 0.1 * DT_MAX
 END_TIME = 50.0
 VORTICITY_TAGGING  = TRUE                // whether to tag cells for refinement based on vorticity thresholds
@@ -91,8 +91,8 @@ SECOND_ORDER_PRESSURE_UPDATE = TRUE
 P = "1.0"
 
 // Structural parameters
-KAPPA = 1000.0
-ETA = 1.25
+KAPPA = 0.85*3.531250*1000.0
+ETA = 0.85*1.843750*1.0
 ERROR_ON_MOVE = TRUE
 MFAC = 1.5
 ELEM_TYPE = "TRI3"

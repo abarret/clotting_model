@@ -6,7 +6,7 @@ LX = 32.0
 LY = 4.0
 RATIO = LX / LY
 RE = 100.0
-P_INLET = 5.0
+P_INLET = 12.5
 RADIUS = 1.0
 
 // grid spacing parameters
@@ -31,9 +31,9 @@ CONVECTIVE_FORM    = "ADVECTIVE"          // how to compute the convective terms
 NORMALIZE_PRESSURE = FALSE                 // whether to explicitly force the pressure to have mean zero
 CFL_MAX            = 0.3                  // maximum CFL number
 U_MAX              = RE * MU / (RHO * RADIUS)
-DT_MAX = 0.25*DX * CFL_MAX / U_MAX
+DT_MAX = 0.1*DX * CFL_MAX / U_MAX
 DT_MIN = 0.1 * DT_MAX
-END_TIME = 100.0
+END_TIME = 50.0
 VORTICITY_TAGGING  = TRUE                // whether to tag cells for refinement based on vorticity thresholds
 TAG_BUFFER         = 3                    // sized of tag buffer used by grid generation algorithm
 REGRID_CFL_INTERVAL    = 0.75
@@ -56,9 +56,9 @@ OUTPUT_DIV_U       = TRUE
 ENABLE_LOGGING     = TRUE
 
 // Structural parameters
-KAPPA = 1000.0
-ETA = 1.25
-ERROR_ON_MOVE = FALSE
+KAPPA = 0.75*3.531250*1000.0
+ETA = 0.75*1.843750*1.0
+ERROR_ON_MOVE = TRUE
 MFAC = 1.5
 ELEM_TYPE = "TRI3"
 ELEM_ORDER = "FIRST"
