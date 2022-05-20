@@ -211,6 +211,8 @@ main(int argc, char* argv[])
         const bool dump_restart_data = app_initializer->dumpRestartData();
         const int restart_dump_interval = app_initializer->getRestartDumpInterval();
         const string restart_dump_dirname = app_initializer->getRestartDumpDirectory();
+	const string restart_read_dirname = app_initializer->getRestartReadDirectory();
+	const int restart_restore_num = app_initializer->getRestartRestoreNumber();
 
         const bool dump_postproc_data = app_initializer->dumpPostProcessingData();
         const int postproc_data_dump_interval = app_initializer->getPostProcessingDataDumpInterval();
@@ -307,7 +309,10 @@ main(int argc, char* argv[])
             new IIMethod("IIMethod",
                          app_initializer->getComponentDatabase("IIMethod"),
                          &mesh,
-                         app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"));
+                         app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"),
+			 true,
+			 restart_read_dirname,
+			 restart_restore_num);
         Pointer<IBHierarchyIntegrator> time_integrator =
             new IBExplicitHierarchyIntegrator("IBHierarchyIntegrator",
                                               app_initializer->getComponentDatabase("IBHierarchyIntegrator"),
