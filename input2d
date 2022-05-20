@@ -15,6 +15,7 @@ NX = RATIO*NY                                 // number of grid cells on coarses
 // Note that we use the same grid spacing in both directions
 NFINEST = (REF_RATIO^(MAX_LEVELS - 1))*NX  // effective number of grid cells on finest grid level in the X direction
 DX = LX / NFINEST
+VIZ_DUMP_TIME_INTERVAL = 0.25
 
 // Complex Fluid parameters
 FLUID_MODEL = "USER_DEFINED"
@@ -413,12 +414,12 @@ Main {
 
 // visualization dump parameters
    viz_writer                  = "VisIt"
-   viz_dump_interval           = 800
+   viz_dump_interval           = 100
    viz_dump_dirname            = "visit"
    visit_number_procs_per_file = 1
 
 // restart dump parameters
-   restart_dump_interval       = 0
+   restart_dump_interval       = 800
    restart_dump_dirname        = "restart_INS2d"
 
 // timer dump parameters
