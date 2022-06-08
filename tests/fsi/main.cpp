@@ -17,7 +17,6 @@
 #include <ibamr/AdvDiffSemiImplicitHierarchyIntegrator.h>
 #include <ibamr/CFINSForcing.h>
 #include <ibamr/IBExplicitHierarchyIntegrator.h>
-#include <ibamr/IBFEMethod.h>
 #include <ibamr/IIMethod.h>
 #include <ibamr/INSCollocatedHierarchyIntegrator.h>
 #include <ibamr/INSStaggeredHierarchyIntegrator.h>
@@ -82,46 +81,6 @@ center_vel(const double t)
     VectorNd d(VectorNd::Zero());
     if (t >= t_start) d[0] = 2.0 * M_PI * A / f * std::cos(2.0 * M_PI * (t - t_start) / f);
     return d;
-}
-
-void
-tether_force_function(VectorValue<double>& F,
-                      const TensorValue<double>& /*FF*/,
-                      const libMesh::Point& x,
-                      const libMesh::Point& X,
-                      Elem* const /*elem*/,
-                      const vector<const vector<double>*>& var_data,
-                      const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
-                      double time,
-                      void* /*ctx*/)
-{
-    // Tether to initial location using damped springs
-    // x is current location
-    // X is reference location
-    // U is velocity
-    const libMesh::Point disp = center(time) + X;
-    const std::vector<double>& U = *var_data[0];
-    for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (disp(d) - x(d)) - eta * (U[d] - center_vel(time)[d]);
-    // Check to see how much structure has moved. If more than a quarter of a grid cell, quit.
-    std::vector<double> d = { std::abs(x(0) - disp(0)), std::abs(x(1) - disp(1)) };
-    if (ERROR_ON_MOVE && ((d[0] > 0.25 * dx) || (d[1] > 0.25 * dx))) TBOX_ERROR("Structure has moved too much.\n");
-}
-
-void
-tether_penalty_stress_fcn(TensorValue<double>& PP,
-                          const TensorValue<double>& FF,
-                          const libMesh::Point& /*X*/,
-                          const libMesh::Point& /*s*/,
-                          Elem* const /*elem*/,
-                          const vector<const vector<double>*>& /*var_data*/,
-                          const vector<const vector<VectorValue<double>>*>& /*grad_var_data*/,
-                          double /*time*/,
-                          void* ctx)
-{
-    const TensorValue<double> FF_inv_trans = tensor_inverse_transpose(FF, NDIM);
-    double J = FF.det();
-    PP = beta_s * log(J) * FF_inv_trans;
-    return;
 }
 
 /// This tether_force_function is for the boundary of the structure. We only use it when using the II method.
@@ -285,10 +244,6 @@ main(int argc, char* argv[])
                          app_initializer->getComponentDatabase("IIMethod"),
                          &mesh,
                          app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"));
-        //            new IBFEMethod("IBFEMethod",
-        //                           app_initializer->getComponentDatabase("IBFEMethod"),
-        //                           &mesh,
-        //                           app_initializer->getComponentDatabase("GriddingAlgorithm")->getInteger("max_levels"));
         Pointer<IBHierarchyIntegrator> time_integrator =
             new IBExplicitHierarchyIntegrator("IBHierarchyIntegrator",
                                               app_initializer->getComponentDatabase("IBHierarchyIntegrator"),
@@ -325,11 +280,6 @@ main(int argc, char* argv[])
         std::vector<SystemData> sys_data = { SystemData(IIMethod::VELOCITY_SYSTEM_NAME, vars) };
         IIMethod::LagSurfaceForceFcnData surface_fcn_data(surface_tether_function, sys_data);
         ib_method_ops->registerLagSurfaceForceFunction(surface_fcn_data);
-
-        //        IBFEMethod::LagBodyForceFcnData body_fcn_data(tether_force_function, sys_data);
-        //        ib_method_ops->registerLagBodyForceFunction(body_fcn_data);
-        //        beta_s = input_db->getDouble("BETA_S");
-        //        ib_method_ops->registerPK1StressFunction(tether_penalty_stress_fcn);
 
         // Create boundary condition specification objects (when necessary).
         const IntVector<NDIM>& periodic_shift = grid_geometry->getPeriodicShift();

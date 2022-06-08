@@ -49,7 +49,8 @@ public:
                SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
                SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
                SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-               SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
+               SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator,
+               SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> sb_adv_diff_integrator);
 
     /*!
      * \brief Empty destructor.
@@ -111,7 +112,7 @@ private:
     BondSource(const BondSource& from) = delete;
     BondSource& operator=(const BondSource& that) = delete;
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var, d_sig_var;
-    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
+    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_integrator, d_sb_adv_diff_integrator;
 };
 } // namespace IBAMR
 

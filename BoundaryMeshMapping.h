@@ -2,6 +2,8 @@
 #define included_IBAMR_BoundaryMeshMapping
 #include <ibtk/FEDataManager.h>
 
+#include <ADS/GeneralBoundaryMeshMapping.h>
+
 #include <libmesh/boundary_mesh.h>
 #include <libmesh/mesh.h>
 
@@ -13,7 +15,7 @@ namespace IBAMR
  * Implementations for this object should define how the object moves. A default implementation of no motion is
  * included.
  */
-class BoundaryMeshMapping
+class BoundaryMeshMapping : public ADS::GeneralBoundaryMeshMapping
 {
 public:
     /*!
@@ -23,7 +25,9 @@ public:
     BoundaryMeshMapping(std::string object_name,
                         SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                         libMesh::MeshBase* vol_mesh,
-                        IBTK::FEDataManager* fe_data_manager);
+                        IBTK::FEDataManager* fe_data_manager,
+                        const std::string& restart_read_dirname = "",
+                        unsigned int restart_restore_number = 0);
 
     /*!
      * \brief Default deconstructor.
@@ -50,9 +54,13 @@ public:
      */
     void setInitialConditions();
 
-    void initializeEquationSystems();
+    void initializeFEData() override;
 
-    void updateBoundaryLocation(double t_start, double t_end, bool initial_time);
+    void initializeEquationSystems() override;
+
+    void buildBoundaryMesh() override;
+
+    void updateBoundaryLocation(double time, unsigned int part, bool end_of_timestep = false) override;
 
     /*!
      * \brief Spread the number of used wall sites. The provided patch index must have enough ghost cell width to
@@ -70,23 +78,11 @@ public:
     }
 
 protected:
-    std::string d_object_name;
-    libMesh::MeshBase* d_orig_mesh = nullptr;
-    IBTK::FEDataManager* d_orig_data_manager = nullptr;
-
-    std::unique_ptr<libMesh::MeshBase> d_bdry_mesh = nullptr;
-    std::unique_ptr<libMesh::EquationSystems> d_bdry_eq_sys = nullptr;
-    std::shared_ptr<IBTK::FEData> d_fe_data = nullptr;
-    IBTK::FEDataManager* d_bdry_data_manager = nullptr;
-
-    std::string d_coords_sys_name = "COORDINATES_SYSTEM";
-    std::string d_disp_sys_name = "DISPLACEMENT_SYSTEM";
     std::string d_W_sys_name = "W_SYSTEM";
-
-    SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> d_input_db;
+    IBTK::FEDataManager* d_base_data_manager;
 
     // We need a map between original mesh nodes and bdry mesh nodes
-    std::map<libMesh::Node*, libMesh::Node*> d_bdry_orig_node_map;
+    std::map<libMesh::Node*, libMesh::Node*> d_bdry_base_node_map;
 
     // We also maintain an Eulerian description of the wall sites
     SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_w_var;
