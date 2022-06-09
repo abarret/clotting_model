@@ -23,17 +23,19 @@
 
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
-BondSource::BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
-                       SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                       SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
-                       SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
-                       SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                       SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
+BondSource::BondSource(Pointer<hier::Variable<NDIM>> phi_u_var,
+                       Pointer<hier::Variable<NDIM>> phi_a_var,
+                       Pointer<hier::Variable<NDIM>> z_var,
+                       Pointer<hier::Variable<NDIM>> sig_var,
+                       Pointer<Database> input_db,
+                       Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator,
+                       Pointer<AdvDiffHierarchyIntegrator> sb_adv_diff_integrator)
     : d_phi_u_var(phi_u_var),
       d_phi_a_var(phi_a_var),
       d_z_var(z_var),
       d_sig_var(sig_var),
-      d_adv_diff_hier_integrator(adv_diff_hier_integrator)
+      d_adv_diff_integrator(adv_diff_integrator),
+      d_sb_adv_diff_integrator(sb_adv_diff_integrator)
 {
     // init db vars
     d_a0 = input_db->getDouble("a0");
@@ -59,33 +61,37 @@ BondSource::setDataOnPatchHierarchy(const int data_idx,
 {
     // This implementation atm is identical to ActivatePlatelet Source
     // Loop over variables.
-    std::array<Pointer<Variable<NDIM>>, 4> vars = { d_phi_u_var, d_z_var, d_phi_a_var, d_sig_var };
+    std::array<std::pair<Pointer<Variable<NDIM>>, Pointer<AdvDiffHierarchyIntegrator>>, 4> var_hier_pairs = {
+        std::make_pair(d_phi_u_var, d_sb_adv_diff_integrator),
+        std::make_pair(d_z_var, d_sb_adv_diff_integrator),
+        std::make_pair(d_phi_a_var, d_sb_adv_diff_integrator),
+        std::make_pair(d_sig_var, d_adv_diff_integrator)
+    };
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
-    for (const auto local_var : vars)
+    for (const auto var_hier_pair : var_hier_pairs)
     {
+        Pointer<Variable<NDIM>> local_var = var_hier_pair.first;
+        Pointer<AdvDiffHierarchyIntegrator> integrator = var_hier_pair.second;
         // Allocate scratch data when needed.
         VariableDatabase<NDIM>* var_db = VariableDatabase<NDIM>::getDatabase();
-        int var_scr_idx =
-            var_db->mapVariableAndContextToIndex(local_var, d_adv_diff_hier_integrator->getScratchContext());
-        scratch_allocated[local_var] = d_adv_diff_hier_integrator->isAllocatedPatchData(var_scr_idx);
+        int var_scr_idx = var_db->mapVariableAndContextToIndex(local_var, integrator->getScratchContext());
+        scratch_allocated[local_var] = integrator->isAllocatedPatchData(var_scr_idx);
         if (!scratch_allocated[local_var])
         {
-            d_adv_diff_hier_integrator->allocatePatchData(var_scr_idx, data_time);
+            integrator->allocatePatchData(var_scr_idx, data_time);
         }
 
         // Communicate ghost-cell data.
         if (!initial_time)
         {
             // Determine values at correct timestep.
-            int var_current_idx =
-                var_db->mapVariableAndContextToIndex(local_var, d_adv_diff_hier_integrator->getCurrentContext());
-            int var_new_idx =
-                var_db->mapVariableAndContextToIndex(local_var, d_adv_diff_hier_integrator->getNewContext());
-            const bool var_new_is_allocated = d_adv_diff_hier_integrator->isAllocatedPatchData(var_new_idx);
+            int var_current_idx = var_db->mapVariableAndContextToIndex(local_var, integrator->getCurrentContext());
+            int var_new_idx = var_db->mapVariableAndContextToIndex(local_var, integrator->getNewContext());
+            const bool var_new_is_allocated = integrator->isAllocatedPatchData(var_new_idx);
             HierarchyDataOpsManager<NDIM>* hier_data_ops_manager = HierarchyDataOpsManager<NDIM>::getManager();
             Pointer<HierarchyDataOpsReal<NDIM, double>> hier_cc_data_ops =
                 hier_data_ops_manager->getOperationsDouble(local_var, hierarchy, /*get_unique*/ true);
-            if (d_adv_diff_hier_integrator->getCurrentCycleNumber() == 0 || !var_new_is_allocated)
+            if (integrator->getCurrentCycleNumber() == 0 || !var_new_is_allocated)
             {
                 // Copy values from step n.
                 hier_cc_data_ops->copyData(var_scr_idx, var_current_idx);
@@ -94,7 +100,7 @@ BondSource::setDataOnPatchHierarchy(const int data_idx,
             {
                 // Values at step n+1 is filled, so we use values at step n+1/2
 #if !defined(NDEBUG)
-                TBOX_ASSERT(d_adv_diff_hier_integrator->getCurrentCycleNumber() > 0);
+                TBOX_ASSERT(integrator->getCurrentCycleNumber() > 0);
 #endif
                 hier_cc_data_ops->linearSum(var_scr_idx, 0.5, var_current_idx, 0.5, var_new_idx);
             }
@@ -107,7 +113,7 @@ BondSource::setDataOnPatchHierarchy(const int data_idx,
                                      "CONSERVATIVE_COARSEN",
                                      "LINEAR",
                                      false,
-                                     d_adv_diff_hier_integrator->getPhysicalBcCoefs(local_var));
+                                     integrator->getPhysicalBcCoefs(local_var));
             HierarchyGhostCellInterpolation ghost_fill_op;
             ghost_fill_op.initializeOperatorState(ghost_fill_component, hierarchy);
             ghost_fill_op.fillData(data_time);
@@ -123,14 +129,15 @@ BondSource::setDataOnPatchHierarchy(const int data_idx,
     }
 
     // Deallocate scratch data when needed.
-    for (const auto& local_var : vars)
+    for (const auto& var_hier_pair : var_hier_pairs)
     {
+        Pointer<Variable<NDIM>> local_var = var_hier_pair.first;
+        Pointer<AdvDiffHierarchyIntegrator> integrator = var_hier_pair.second;
         if (!scratch_allocated[local_var])
         {
             auto var_db = VariableDatabase<NDIM>::getDatabase();
-            int var_scr_idx =
-                var_db->mapVariableAndContextToIndex(local_var, d_adv_diff_hier_integrator->getScratchContext());
-            d_adv_diff_hier_integrator->deallocatePatchData(var_scr_idx);
+            int var_scr_idx = var_db->mapVariableAndContextToIndex(local_var, integrator->getScratchContext());
+            d_sb_adv_diff_integrator->deallocatePatchData(var_scr_idx);
         }
     }
     return;
@@ -150,14 +157,14 @@ BondSource::setDataOnPatch(const int data_idx,
     if (initial_time) return;
     // grab cell data for variables
     Pointer<CellData<NDIM, double>> phi_a_data =
-        patch->getPatchData(d_phi_a_var, d_adv_diff_hier_integrator->getScratchContext());
+        patch->getPatchData(d_phi_a_var, d_sb_adv_diff_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_u_data =
-        patch->getPatchData(d_phi_u_var, d_adv_diff_hier_integrator->getScratchContext());
+        patch->getPatchData(d_phi_u_var, d_sb_adv_diff_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> z_data =
-        patch->getPatchData(d_z_var, d_adv_diff_hier_integrator->getScratchContext());
+        patch->getPatchData(d_z_var, d_sb_adv_diff_integrator->getScratchContext());
     // stress tensor and wall sites
     Pointer<CellData<NDIM, double>> sig_data =
-        patch->getPatchData(d_sig_var, d_adv_diff_hier_integrator->getScratchContext());
+        patch->getPatchData(d_sig_var, d_adv_diff_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
