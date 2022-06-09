@@ -1,9 +1,9 @@
-#ifndef included_utility_functions_inl
-#define included_utility_functions_inl
+#ifndef included_clot_utility_functions_inl
+#define included_clot_utility_functions_inl
 
-#include "utility_functions.h"
+#include <clot/utility_functions.h>
 
-namespace IBAMR
+namespace clot
 {
 inline double
 bspline2(double x)
@@ -44,5 +44,5 @@ bspline4(double x)
         return 0.0;
 }
 
-} // namespace IBAMR
+} // namespace clot
 #endif

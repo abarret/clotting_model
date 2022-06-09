@@ -11,15 +11,15 @@
 //
 // ---------------------------------------------------------------------
 
-#ifndef included_PlateletSource
-#define included_PlateletSource
+#ifndef included_clot_PlateletSource
+#define included_clot_PlateletSource
+
+#include <clot/utility_functions.h>
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
 
-#include "utility_functions.h"
-
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
-namespace IBAMR
+namespace clot
 {
 /*!
  * \brief Class PlateletSource provides a source term for the activated platelet concentration.
@@ -34,7 +34,7 @@ public:
                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
                    SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
                    SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                   SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
+                   SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
 
     /*!
      * \brief Empty destructor.
@@ -77,7 +77,7 @@ public:
 
     //\}
 
-    inline void setKernel(const IBAMR::Kernel kern)
+    inline void setKernel(const clot::Kernel kern)
     {
         d_kernel = kern;
     }
@@ -105,12 +105,12 @@ private:
 
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var;
     int d_w_idx = IBTK::invalid_index;
-    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
+    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_adv_diff_hier_integrator;
 
     // Note we need our own scratch index with larger ghost width to compute the convolution.
     int d_pl_scr_idx = IBTK::invalid_index;
 };
-} // namespace IBAMR
+} // namespace clot
 //////////////////////////////////////////////////////////////////////////////
 
-#endif //#ifndef included_PlateletSource
+#endif //#ifndef included_clot_PlateletSource

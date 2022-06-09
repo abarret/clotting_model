@@ -56,23 +56,26 @@ IncludeCategories:
 # first our config files:
   - Regex: "(ibamr|ibtk)/config.h"
     Priority: -1
-# then CCAD
-  - Regex: "[<\"]CCAD/.*\\.h[<\"]$"
-    Priority: 5
+# then clot
+  - Regex: "[<\"]clot/.*\\.h[>\"]"
+    Priority: 10
+# then ADS
+  - Regex: "[<\"]ADS/.*\\.h[>\"]"
+    Priority: 20
 # then IBAMR/IBTK library:
   - Regex: "ibamr/.*\\.h.$"
-    Priority: 10
+    Priority: 30
   - Regex: "ibtk/.*\\.h.$"
-    Priority: 20
+    Priority: 40
 # silo has a limited number of headers so just hard-code it:
   - Regex: "[<\"](ioperf\\.h|lite_pdb\\.h|lite_score\\.h|pmpio\\.h|silo_exports\\.h|silo\\.h)[\">]"
     Priority: 700
 # libMesh:
   - Regex: "libmesh/"
-    Priority: 200
+    Priority: 50
 # PETSc:
   - Regex: "[<\"]petsc[a-z]*\\.h[>\"]$"
-    Priority: 300
+    Priority: 60
 # other standardized headers:
   - Regex: "<[A-Za-z_]*\\.h>"
     Priority: 1000
@@ -81,7 +84,7 @@ IncludeCategories:
     Priority: 400
 # eigen:
   - Regex: "Eigen/"
-    Priority: 500
+    Priority: 70
 # muParser:
   - Regex: "muParser"
     Priority: 600
@@ -91,9 +94,9 @@ IncludeCategories:
 # SAMRAI (which goes after IBAMR). This is last since we have headers that are
 # not in a folder starting with the library's name:
   - Regex: "[<\"][A-Z].*\\.h[>\"]$"
-    Priority: 100
+    Priority: 80
   - Regex: "[<\"]tbox/[A-Z].*\\.h[>\"]$"
-    Priority: 110
+    Priority: 90
 
 SortIncludes: true
 # don't place the header corresponding to the source file first

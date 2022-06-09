@@ -1,13 +1,11 @@
-#include <ibamr/app_namespaces.h>
+#include <clot/app_namespaces.h>
+#include <clot/utility_functions.h>
 
 #include <ibtk/ibtk_utilities.h>
 
 #include <Box.h>
 
-// Local includes
-#include "utility_functions.h"
-
-namespace IBAMR
+namespace clot
 {
 double
 convolution(double alpha,
@@ -63,4 +61,4 @@ convolution_mask(double alpha,
     else
         return convolve;
 }
-} // namespace IBAMR
+} // namespace clot

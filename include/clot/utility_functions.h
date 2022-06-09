@@ -1,19 +1,19 @@
 /////////////////////////////// INCLUDE GUARD ////////////////////////////////
 
-#ifndef included_utility_functions
-#define included_utility_functions
+#ifndef included_clot_utility_functions
+#define included_clot_utility_functions
 
 /////////////////////////////// INCLUDES /////////////////////////////////////
 #include <ibamr/config.h>
 
-#include <ibamr/ibamr_enums.h>
+#include <ibtk/ibtk_utilities.h>
 
 #include <CellData.h>
 #include <CellIndex.h>
 
 #include <functional>
 
-namespace IBAMR
+namespace clot
 {
 /*!
  * Computes the convolution of (alpha*a + beta*b) and the function phi at a given patch index, assuming phi has finite
@@ -39,8 +39,23 @@ double convolution_mask(double alpha,
                         unsigned int phi_width,
                         const SAMRAI::pdat::CellIndex<NDIM>& idx,
                         const double* const dx,
-                        const VectorNd& x,
-                        const std::array<VectorNd, 2>& xbds);
+                        const IBTK::VectorNd& x,
+                        const std::array<IBTK::VectorNd, 2>& xbds);
+
+template <typename T>
+inline T
+string_to_enum(const std::string& /*val*/)
+{
+    TBOX_ERROR("UNSUPPORTED ENUM TYPE\n");
+    return -1;
+}
+
+template <typename T>
+inline std::string enum_to_string(T /*val*/)
+{
+    TBOX_ERROR("UNSUPPORTED ENUM TYPE\n");
+    return "UNKNOWN";
+}
 
 enum Kernel
 {
@@ -96,8 +111,8 @@ getKernelAndWidth(Kernel val)
     // We've thrown an error, so just return whatever.
     return std::make_pair(bspline2, -1);
 }
-} // namespace IBAMR
+} // namespace clot
 
-#include "utility_functions.I"
+#include "clot/private/utility_functions_inc.h"
 
-#endif // included_utility_functions
+#endif // included_clot_utility_functions

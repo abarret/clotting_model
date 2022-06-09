@@ -13,15 +13,15 @@
 
 #include <ibamr/config.h>
 
-#include <ibamr/app_namespaces.h>
+#include <clot/PlateletSource.h>
+#include <clot/app_namespaces.h>
 
 #include <HierarchyDataOpsManager.h>
 #include <SAMRAI_config.h>
 #include <math.h>
 
-// Local includes
-#include "PlateletSource.h"
-
+namespace clot
+{
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
 PlateletSource::PlateletSource(std::string object_name,
@@ -194,7 +194,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
     const hier::Index<NDIM>& idx_low = patch_box.lower();
-    auto psi_fcn = IBAMR::getKernelAndWidth(d_kernel);
+    auto psi_fcn = getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         const CellIndex<NDIM>& idx = ci();
@@ -216,4 +216,5 @@ PlateletSource::setDataOnPatch(const int data_idx,
     }
     return;
 } // setDataOnPatch
+} // namespace clot
 //////////////////////////////////////////////////////////////////////////////

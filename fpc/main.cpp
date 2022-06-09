@@ -14,6 +14,18 @@
 // Config files
 #include <ibamr/config.h>
 
+#include <clot/BondSource.h>
+#include <clot/BoundaryMeshMapping.h>
+#include <clot/CohesionStressRHS.h>
+#include <clot/PlateletSource.h>
+#include <clot/app_namespaces.h>
+
+#include <ADS/CutCellVolumeMeshMapping.h>
+#include <ADS/GeneralBoundaryMeshMapping.h>
+#include <ADS/LSCutCellLaplaceOperator.h>
+#include <ADS/LSFromMesh.h>
+#include <ADS/SBAdvDiffIntegrator.h>
+
 #include <ibamr/AdvDiffSemiImplicitHierarchyIntegrator.h>
 #include <ibamr/CFINSForcing.h>
 #include <ibamr/IBExplicitHierarchyIntegrator.h>
@@ -28,16 +40,6 @@
 #include <ibtk/muParserCartGridFunction.h>
 #include <ibtk/muParserRobinBcCoefs.h>
 
-#include <ADS/CutCellVolumeMeshMapping.h>
-#include <ADS/GeneralBoundaryMeshMapping.h>
-#include <ADS/LSCutCellLaplaceOperator.h>
-#include <ADS/LSFromMesh.h>
-#include <ADS/SBAdvDiffIntegrator.h>
-#include <ADS/app_namespaces.h>
-
-#include "libmesh/mesh_modification.h"
-#include "libmesh/mesh_refinement.h"
-#include "libmesh/mesh_tools.h"
 #include <libmesh/boundary_info.h>
 #include <libmesh/boundary_mesh.h>
 #include <libmesh/elem.h>
@@ -45,6 +47,9 @@
 #include <libmesh/exodusII_io.h>
 #include <libmesh/mesh.h>
 #include <libmesh/mesh_generation.h>
+#include <libmesh/mesh_modification.h>
+#include <libmesh/mesh_refinement.h>
+#include <libmesh/mesh_tools.h>
 #include <libmesh/mesh_triangle_interface.h>
 
 #include <petscsys.h>
@@ -57,12 +62,6 @@
 
 #include <fstream>
 #include <iostream>
-
-// Local Headers
-#include "BondSource.h"
-#include "BoundaryMeshMapping.h"
-#include "CohesionStressRHS.h"
-#include "PlateletSource.h"
 
 // Function prototypes
 void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,

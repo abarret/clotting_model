@@ -21,10 +21,10 @@
 #include "tbox/Database.h"
 
 // Local headers
-#include "CohesionStressRHS.h"
+#include "clot/CohesionStressRHS.h"
 
 // Namespace
-namespace IBAMR
+namespace clot
 {
 CohesionStressRHS::CohesionStressRHS(Pointer<Variable<NDIM>> phi_u_var,
                                      Pointer<Variable<NDIM>> phi_a_var,
@@ -211,4 +211,4 @@ CohesionStressRHS::registerBetaFcn(std::function<double(double, void*)> wrapper,
     d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
 }
 
-} // namespace IBAMR
+} // namespace clot

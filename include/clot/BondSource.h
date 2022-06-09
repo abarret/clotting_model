@@ -11,32 +11,34 @@
 //
 // ---------------------------------------------------------------------
 
-#ifndef included_BondSource
-#define included_BondSource
+#ifndef included_clot_BondSource
+#define included_clot_BondSource
+
+#include <clot/utility_functions.h>
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
 
-#include "Box.h"
-#include "CartesianPatchGeometry.h"
-#include "CellData.h"
-#include "CellIndex.h"
-#include "CellVariable.h"
-#include "Index.h"
-#include "IntVector.h"
-#include "Patch.h"
-#include "PatchGeometry.h"
-#include "PatchHierarchy.h"
-#include "PatchLevel.h"
-#include "Variable.h"
-#include "tbox/Database.h"
-#include "tbox/Pointer.h"
-#include "tbox/Utilities.h"
-#include "utility_functions.h"
+#include <tbox/Database.h>
+#include <tbox/Pointer.h>
+#include <tbox/Utilities.h>
+
+#include <Box.h>
+#include <CartesianPatchGeometry.h>
+#include <CellData.h>
+#include <CellIndex.h>
+#include <CellVariable.h>
+#include <Index.h>
+#include <IntVector.h>
+#include <Patch.h>
+#include <PatchGeometry.h>
+#include <PatchHierarchy.h>
+#include <PatchLevel.h>
+#include <Variable.h>
 
 #include <functional>
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
-namespace IBAMR
+namespace clot
 {
 class BondSource : public IBTK::CartGridFunction
 {
@@ -49,8 +51,8 @@ public:
                SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
                SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
                SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-               SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator,
-               SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> sb_adv_diff_integrator);
+               SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_integrator,
+               SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> sb_adv_diff_integrator);
 
     /*!
      * \brief Empty destructor.
@@ -112,8 +114,8 @@ private:
     BondSource(const BondSource& from) = delete;
     BondSource& operator=(const BondSource& that) = delete;
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var, d_sig_var;
-    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_integrator, d_sb_adv_diff_integrator;
+    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_adv_diff_integrator, d_sb_adv_diff_integrator;
 };
-} // namespace IBAMR
+} // namespace clot
 
 #endif

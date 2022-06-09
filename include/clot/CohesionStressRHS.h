@@ -13,43 +13,44 @@
 
 /////////////////////////////// INCLUDE GUARD ////////////////////////////////
 
-#ifndef included_CohesionStressRHS
-#define included_CohesionStressRHS
+#ifndef included_clot_CohesionStressRHS
+#define included_clot_CohesionStressRHS
 
 /////////////////////////////// INCLUDES /////////////////////////////////////
 
 #include <ibamr/config.h>
 
-#include "ibamr/CFRelaxationOperator.h"
-#include "ibamr/ibamr_enums.h"
+#include <clot/utility_functions.h>
 
-#include "Box.h"
-#include "CartesianPatchGeometry.h"
-#include "CellData.h"
-#include "CellIndex.h"
-#include "CellVariable.h"
-#include "Index.h"
-#include "IntVector.h"
-#include "Patch.h"
-#include "PatchGeometry.h"
-#include "PatchHierarchy.h"
-#include "PatchLevel.h"
-#include "Variable.h"
-#include "tbox/Database.h"
-#include "tbox/Pointer.h"
-#include "tbox/Utilities.h"
-#include "utility_functions.h"
+#include <ibamr/CFRelaxationOperator.h>
+
+#include <tbox/Database.h>
+#include <tbox/Pointer.h>
+#include <tbox/Utilities.h>
+
+#include <Box.h>
+#include <CartesianPatchGeometry.h>
+#include <CellData.h>
+#include <CellIndex.h>
+#include <CellVariable.h>
+#include <Index.h>
+#include <IntVector.h>
+#include <Patch.h>
+#include <PatchGeometry.h>
+#include <PatchHierarchy.h>
+#include <PatchLevel.h>
+#include <Variable.h>
 
 #include <functional>
 #include <string>
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
 
-namespace IBAMR
+namespace clot
 {
 /*!
- * \brief Class CFOldroydBRelaxation is a concrete CFRelaxationOperator that computes the relaxation function for an
- * Oldroyd-B fluid model.
+ * \brief Class CohesionStressRHS is a concrete CFRelaxationOperator that computes the relaxation function for the
+ * clotting model.
  */
 class CohesionStressRHS : public IBAMR::CFRelaxationOperator
 {
@@ -62,7 +63,7 @@ public:
                       SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
                       const std::string& object_name,
                       SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                      SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator);
+                      SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_integrator);
 
     /*!
      * \brief Default constructor.
@@ -140,8 +141,8 @@ private:
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
 
-    SAMRAI::tbox::Pointer<AdvDiffHierarchyIntegrator> d_adv_diff_integrator;
+    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_adv_diff_integrator;
 };
 
-} // Namespace IBAMR
+} // Namespace clot
 #endif
