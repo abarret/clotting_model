@@ -1,6 +1,6 @@
 ADD_TEST(
    TARGET_NAME
-      "fsi"
+      "tests-fsi"
    OUTPUT_DIRECTORY
       "${CMAKE_BINARY_DIR}/tests/fsi"
    OUTPUT_NAME

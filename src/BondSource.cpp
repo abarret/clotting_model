@@ -13,16 +13,16 @@
 
 #include <ibamr/config.h>
 
-#include <ibamr/app_namespaces.h>
+#include <clot/BondSource.h>
+#include <clot/app_namespaces.h>
 
 #include <HierarchyDataOpsManager.h>
 #include <SAMRAI_config.h>
 #include <math.h>
-// local include
-#include "BondSource.h"
 
+namespace clot
+{
 /////////////////////////////// PUBLIC ///////////////////////////////////////
-
 BondSource::BondSource(Pointer<hier::Variable<NDIM>> phi_u_var,
                        Pointer<hier::Variable<NDIM>> phi_a_var,
                        Pointer<hier::Variable<NDIM>> z_var,
@@ -206,3 +206,4 @@ BondSource::registerBetaFcn(std::function<double(double, void*)> wrapper, void* 
     // We set beta here
     d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
 } // registerBetaFcn
+} // namespace clot

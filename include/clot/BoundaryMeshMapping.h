@@ -1,13 +1,13 @@
-#ifndef included_IBAMR_BoundaryMeshMapping
-#define included_IBAMR_BoundaryMeshMapping
-#include <ibtk/FEDataManager.h>
-
+#ifndef included_clot_BoundaryMeshMapping
+#define included_clot_BoundaryMeshMapping
 #include <ADS/GeneralBoundaryMeshMapping.h>
+
+#include <ibtk/FEDataManager.h>
 
 #include <libmesh/boundary_mesh.h>
 #include <libmesh/mesh.h>
 
-namespace IBAMR
+namespace clot
 {
 /*!
  * BoundaryMeshMapping is a class that generalizes the notion of a boundary mesh. It maintains an EquationSystems
@@ -92,5 +92,5 @@ private:
     void commonConstructor(SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
 };
 
-} // namespace IBAMR
+} // namespace clot
 #endif

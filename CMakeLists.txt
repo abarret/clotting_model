@@ -5,16 +5,19 @@ FIND_PACKAGE(IBAMR REQUIRED)
 FIND_PACKAGE(ADS REQUIRED)
 
 SET(CXX_SRC
-    BondSource.cpp
-    BoundaryMeshMapping.cpp
-    CohesionStressRHS.cpp
-    PlateletSource.cpp
-    utility_functions.cpp
+    src/BondSource.cpp
+    src/BoundaryMeshMapping.cpp
+    src/CohesionStressRHS.cpp
+    src/PlateletSource.cpp
+    src/utility_functions.cpp
     )
-ADD_EXECUTABLE(main2d main.cpp)
-TARGET_SOURCES(main2d PRIVATE ${CXX_SRC})
-TARGET_LINK_LIBRARIES(main2d IBAMR::IBAMR2d)
-TARGET_LINK_LIBRARIES(main2d ADS::ADS2d)
-CONFIGURE_FILE(input2d ${CMAKE_CURRENT_BINARY_DIR}/input2d COPYONLY)
 
+ADD_LIBRARY(Clot)
+TARGET_SOURCES(Clot PRIVATE ${CXX_SRC})
+TARGET_INCLUDE_DIRECTORIES(Clot PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/> $<INSTALL_INTERFACE:${CMAKE_INSTALL_DIR}/include/>)
+TARGET_LINK_LIBRARIES(Clot PUBLIC IBAMR::IBAMR2d)
+TARGET_LINK_LIBRARIES(Clot PUBLIC ADS::ADS2d)
+
+
+ADD_SUBDIRECTORY(fpc)
 ADD_SUBDIRECTORY(tests)

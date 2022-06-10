@@ -1,6 +1,6 @@
 ADD_TEST(
    TARGET_NAME
-      "wall_pts"
+      "tests-wall_pts"
    OUTPUT_DIRECTORY
       "${CMAKE_BINARY_DIR}/tests/wall_pts"
    OUTPUT_NAME

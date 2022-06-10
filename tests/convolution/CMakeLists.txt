@@ -1,6 +1,6 @@
 ADD_TEST(
    TARGET_NAME
-      "convolution"
+      "tests-convolution"
    OUTPUT_DIRECTORY
       "${CMAKE_BINARY_DIR}/tests/convolution"
    OUTPUT_NAME
