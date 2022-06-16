@@ -18,10 +18,10 @@
 #include <clot/BoundaryMeshMapping.h>
 #include <clot/CohesionStressRHS.h>
 #include <clot/PlateletSource.h>
+#include <clot/WallSitesMeshMapping.h>
 #include <clot/app_namespaces.h>
 
 #include <ADS/CutCellVolumeMeshMapping.h>
-#include <ADS/GeneralBoundaryMeshMapping.h>
 #include <ADS/LSCutCellLaplaceOperator.h>
 #include <ADS/LSFromMesh.h>
 #include <ADS/SBAdvDiffIntegrator.h>
@@ -216,7 +216,8 @@ main(int argc, char* argv[])
                  << "Exodus output will be written in this program.\n";
         }
 #endif
-        const std::string exodus_filename = app_initializer->getExodusIIFilename();
+        const std::string base_mesh_filename = app_initializer->getExodusIIFilename("mesh_");
+        const std::string bdry_mesh_filename = app_initializer->getExodusIIFilename("bdry_");
 
         const bool dump_restart_data = app_initializer->dumpRestartData();
         const int restart_dump_interval = app_initializer->getRestartDumpInterval();
@@ -553,19 +554,20 @@ main(int argc, char* argv[])
         // Wall sites
         FEDataManager* fe_data_manager = ib_method_ops->getFEDataManager();
         auto bdry_mesh_mapping =
+            std::make_shared<WallSitesMeshMapping>("WallSitesMesh",
+                                                   app_initializer->getComponentDatabase("BoundaryMesh"),
+                                                   &mesh,
+                                                   fe_data_manager,
+                                                   restart_read_dirname,
+                                                   restart_restore_num);
+        bdry_mesh_mapping->initializeEquationSystems();
+        auto general_mesh_mapping =
             std::make_shared<BoundaryMeshMapping>("BoundaryMesh",
                                                   app_initializer->getComponentDatabase("BoundaryMesh"),
                                                   &mesh,
                                                   fe_data_manager,
                                                   restart_read_dirname,
                                                   restart_restore_num);
-        bdry_mesh_mapping->initializeEquationSystems();
-        auto general_mesh_mapping =
-            std::make_shared<GeneralBoundaryMeshMapping>("GeneralMesh",
-                                                         app_initializer->getComponentDatabase("BoundaryMesh"),
-                                                         &mesh,
-                                                         restart_read_dirname,
-                                                         restart_restore_num);
         general_mesh_mapping->initializeEquationSystems();
         Pointer<CutCellMeshMapping> cut_cell_mapping =
             new CutCellVolumeMeshMapping("CutCellMapping",
@@ -576,7 +578,7 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->registerLevelSetVolFunction(ls_var, ls_fcn);
         sb_adv_diff_integrator->registerGeneralBoundaryMeshMapping(general_mesh_mapping);
         const int w_idx = bdry_mesh_mapping->getWallSitesPatchIndex();
-        std::pair<BoundaryMeshMapping*, GeneralBoundaryMeshMapping*> mesh_mappings =
+        std::pair<WallSitesMeshMapping*, BoundaryMeshMapping*> mesh_mappings =
             std::make_pair(bdry_mesh_mapping.get(), general_mesh_mapping.get());
         auto update_bdry_mesh = [](const double current_time,
                                    const double new_time,
@@ -593,7 +595,7 @@ main(int argc, char* argv[])
                                   const bool /*initial_time*/,
                                   void* ctx) {
             plog << "Spreading wall sites\n";
-            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
+            auto bdry_mesh_mapping = static_cast<WallSitesMeshMapping*>(ctx);
             bdry_mesh_mapping->spreadWallSites();
         };
         time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
@@ -644,10 +646,13 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->registerIntegrateHierarchyCallback(clamp_cell_values, static_cast<void*>(&clamp_vars));
 
         EquationSystems* eq_sys = fe_data_manager->getEquationSystems();
+        EquationSystems* bdry_eq_sys = general_mesh_mapping->getMeshPartitioner()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
-        //        std::unique_ptr<ExodusII_IO> bdry_io(new ExodusII_IO(*meshes[1]));
+        std::unique_ptr<ExodusII_IO> bdry_io(uses_exodus ? new ExodusII_IO(*general_mesh_mapping->getBoundaryMesh()) :
+                                                           nullptr);
         bool from_restart = RestartManager::getManager()->isFromRestart();
         if (exodus_io) exodus_io->append(from_restart);
+        if (bdry_io) bdry_io->append(from_restart);
 
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
@@ -700,7 +705,8 @@ main(int argc, char* argv[])
                 }
                 if (uses_exodus)
                 {
-                    exodus_io->write_timestep(exodus_filename, *eq_sys, viz_dump_iteration_num, loop_time);
+                    exodus_io->write_timestep(base_mesh_filename, *eq_sys, viz_dump_iteration_num, loop_time);
+                    bdry_io->write_timestep(bdry_mesh_filename, *bdry_eq_sys, viz_dump_iteration_num, loop_time);
                 }
 
                 output_net_force(eq_sys, loop_time);
