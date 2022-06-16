@@ -1,5 +1,5 @@
 ADD_CUSTOM_TARGET(tests)
-SET(TEST_DIRECTORIES wall_pts fsi convolution)
+SET(TEST_DIRECTORIES aneurysm wall_pts fsi convolution)
 
 # Convienience macro that sets up a test
 MACRO(ADD_TEST)
@@ -9,11 +9,6 @@ MACRO(ADD_TEST)
    CMAKE_PARSE_ARGUMENTS(EX "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
    # sources are all sources for example plus all the main sources
-   SET(NEW_CXX_SRC)
-   FOREACH(_file ${CXX_SRC})
-      SET (_new_file "${CMAKE_SOURCE_DIR}/${_file}")
-      LIST(APPEND NEW_CXX_SRC "${_new_file}")
-   ENDFOREACH()
    ADD_EXECUTABLE("${EX_TARGET_NAME}" EXCLUDE_FROM_ALL ${EX_SOURCES} ${NEW_CXX_SRC})
    SET_TARGET_PROPERTIES("${EX_TARGET_NAME}"
       PROPERTIES
@@ -21,11 +16,8 @@ MACRO(ADD_TEST)
       "${EX_OUTPUT_DIRECTORY}"
       OUTPUT_NAME
       "${EX_OUTPUT_NAME}")
-   # Include local includes
-   TARGET_INCLUDE_DIRECTORIES("${EX_TARGET_NAME}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-   TARGET_INCLUDE_DIRECTORIES("${EX_TARGET_NAME}" PRIVATE "${CMAKE_SOURCE_DIR}")
-   # Link to IBAMR
-   TARGET_LINK_LIBRARIES("${EX_TARGET_NAME}" ADS::ADS2d)
+   # Link to Library
+   TARGET_LINK_LIBRARIES("${EX_TARGET_NAME}" Clot)
 
    ADD_DEPENDENCIES("${EX_GROUP}" "${EX_TARGET_NAME}")
 
