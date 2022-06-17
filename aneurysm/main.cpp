@@ -18,10 +18,10 @@
 #include <clot/BoundaryMeshMapping.h>
 #include <clot/CohesionStressRHS.h>
 #include <clot/PlateletSource.h>
-#include <clot/WallSitesMeshMapping.h>
 #include <clot/app_namespaces.h>
 
 #include <ADS/CutCellVolumeMeshMapping.h>
+#include <ADS/GeneralBoundaryMeshMapping.h>
 #include <ADS/LSCutCellLaplaceOperator.h>
 #include <ADS/LSFromMesh.h>
 #include <ADS/SBAdvDiffIntegrator.h>
@@ -53,6 +53,8 @@
 #include <libmesh/mesh_triangle_interface.h>
 
 #include <petscsys.h>
+
+#include <boost/math/special_functions/ellint_2.hpp>
 
 #include <BergerRigoutsos.h>
 #include <CartesianGridGeometry.h>
@@ -157,7 +159,7 @@ tether_force_function(VectorValue<double>& F,
                       const TensorValue<double>& /*FF*/,
                       const libMesh::Point& x,
                       const libMesh::Point& X,
-                      Elem* const /*elem*/,
+                      Elem* const elem,
                       const unsigned short /*side*/,
                       const std::vector<const std::vector<double>*>& var_data,
                       const std::vector<const std::vector<VectorValue<double>>*>& /*grad_var_data*/,
@@ -168,14 +170,25 @@ tether_force_function(VectorValue<double>& F,
     const libMesh::Point disp = center(time) + X;
     for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (disp(d) - x(d)) - eta * (U[d] - center_vel(time)[d]);
     VectorValue<double> d = disp - x;
-    if (ERROR_ON_MOVE && d.norm() > 0.25 * dx) TBOX_ERROR("Structure has moved too much.\n");
-}
+    if (ERROR_ON_MOVE && d.norm() > 0.25 * dx)
+    {
+        pout << "displacement: " << d << "\n";
+        pout << "max allowed:  " << 0.25 * dx << "\n";
+        pout << "dx:           " << dx << "\n";
+        pout << "On elem:      " << *elem << "\n";
+        pout << "Cur Location: " << x << "\n";
+        pout << "Ref location: " << X << "\n";
+        TBOX_ERROR("Structure has moved too much.\n");
+    }
 
 } // namespace ModelData
 using namespace ModelData;
 
 static std::ofstream force_stream, tether_stream;
 void output_net_force(EquationSystems* eq_sys, const double loop_time);
+
+void generateMesh(Mesh& mesh, unsigned int N, double a, double L);
+std::pair<double, int> find_s_from_t(double L, double a, double t);
 
 /*******************************************************************************
  * For each run, the input filename and restart information (if needed) must   *
@@ -216,8 +229,7 @@ main(int argc, char* argv[])
                  << "Exodus output will be written in this program.\n";
         }
 #endif
-        const std::string base_mesh_filename = app_initializer->getExodusIIFilename("mesh_");
-        const std::string bdry_mesh_filename = app_initializer->getExodusIIFilename("bdry_");
+        const std::string exodus_filename = app_initializer->getExodusIIFilename();
 
         const bool dump_restart_data = app_initializer->dumpRestartData();
         const int restart_dump_interval = app_initializer->getRestartDumpInterval();
@@ -233,79 +245,17 @@ main(int argc, char* argv[])
         const int timer_dump_interval = app_initializer->getTimerDumpInterval();
 
         // Create finite element mesh
-        Mesh solid_mesh(init.comm(), NDIM);
-        dx = input_db->getDouble("DX");
-        ERROR_ON_MOVE = input_db->getBool("ERROR_ON_MOVE");
-        // mfac is the mesh factor, how many Lagrangian nodes per Eulerian grid cell?
-        const double mfac = input_db->getDouble("MFAC");
-        const double ds = mfac * dx;
-        std::string elem_type = input_db->getString("ELEM_TYPE");
-        std::string elem_order = input_db->getString("ELEM_ORDER");
-        const double R = input_db->getDouble("RADIUS");
-        if (NDIM == 2 && (elem_type == "TRI3" || elem_type == "TRI6"))
-        {
-#ifdef LIBMESH_HAVE_TRIANGLE
-            const int num_circum_nodes = ceil(2.0 * M_PI * R / ds);
-            for (int k = 0; k < num_circum_nodes; ++k)
-            {
-                const double theta = 2.0 * M_PI * static_cast<double>(k) / static_cast<double>(num_circum_nodes);
-                solid_mesh.add_point(libMesh::Point(R * cos(theta), R * sin(theta)));
-            }
-            TriangleInterface triangle(solid_mesh);
-            triangle.triangulation_type() = TriangleInterface::GENERATE_CONVEX_HULL;
-            triangle.elem_type() = Utility::string_to_enum<ElemType>(elem_type);
-            triangle.desired_area() = 1.5 * sqrt(3.0) / 4.0 * ds * ds;
-            triangle.insert_extra_points() = true;
-            triangle.smooth_after_generating() = true;
-            triangle.triangulate();
-#else
-            TBOX_ERROR("ERROR: libMesh appears to have been configured without support for Triangle,\n"
-                       << "       but Triangle is required for TRI3 or TRI6 elements.\n");
-#endif
-        }
-        else
-        {
-            // NOTE: number of segments along boundary is 4*2^r.
-            const double num_circum_segments = 2.0 * M_PI * R / ds;
-            const int r = log2(0.25 * num_circum_segments);
-            MeshTools::Generation::build_sphere(solid_mesh, R, r, Utility::string_to_enum<ElemType>(elem_type));
-        }
-
-        // Ensure nodes on the surface are on the analytic boundary.
-        MeshBase::element_iterator el_end = solid_mesh.elements_begin();
-        for (auto el = solid_mesh.elements_begin(); el != el_end; ++el)
-        {
-            Elem* const elem = *el;
-            for (unsigned int side = 0; side < elem->n_sides(); ++side)
-            {
-                const bool at_mesh_bdry = !elem->neighbor_ptr(side);
-                if (!at_mesh_bdry) continue;
-                for (unsigned int k = 0; k < elem->n_nodes(); ++k)
-                {
-                    if (!elem->is_node_on_side(k, side)) continue;
-                    Node& n = *elem->node_ptr(k);
-                    n = R * n.unit();
-                }
-            }
-        }
-        if (elem_order == "SECOND")
-            solid_mesh.all_second_order(true);
-        else
-            solid_mesh.all_first_order();
-        MeshTools::Modification::translate(solid_mesh, ds * 0.1, ds * 0.1);
-        solid_mesh.prepare_for_use();
-        solid_mesh.print_info();
-
-        BoundaryMesh bdry_mesh(solid_mesh.comm(), solid_mesh.mesh_dimension() - 1);
-        BoundaryInfo& bdry_info = solid_mesh.get_boundary_info();
-        bdry_info.sync(bdry_mesh);
-        bdry_mesh.prepare_for_use();
-
-        MeshBase& mesh = bdry_mesh;
+        Mesh mesh(init.comm(), NDIM);
+        unsigned int N = input_db->getInteger("NUM_PTS");
+        double a = input_db->getDouble("DEPTH");
+        double L = (input_db->getDouble("LX") - 2.0) / 2.0;
+        generateMesh(mesh, N, a, L);
 
         // Get structure parameters
         kappa = input_db->getDouble("KAPPA");
         eta = input_db->getDouble("ETA");
+        dx = input_db->getDouble("DX");
+        ERROR_ON_MOVE = input_db->getBool("ERROR_ON_MOVE");
 
         // Create major algorithm and data objects that comprise the
         // application.  These objects are configured from the input database
@@ -402,11 +352,6 @@ main(int argc, char* argv[])
         {
             time_integrator->registerVisItDataWriter(visit_data_writer);
         }
-
-        // Structure motion parameters
-        A = input_db->getDouble("Amplitude");
-        f = input_db->getDouble("Frequency");
-        t_start = input_db->getDouble("T_START");
 
         // Create advected quantities
         Pointer<CellVariable<NDIM, double>> phi_u_var = new CellVariable<NDIM, double>("phi_u");
@@ -554,20 +499,19 @@ main(int argc, char* argv[])
         // Wall sites
         FEDataManager* fe_data_manager = ib_method_ops->getFEDataManager();
         auto bdry_mesh_mapping =
-            std::make_shared<WallSitesMeshMapping>("WallSitesMesh",
-                                                   app_initializer->getComponentDatabase("BoundaryMesh"),
-                                                   &mesh,
-                                                   fe_data_manager,
-                                                   restart_read_dirname,
-                                                   restart_restore_num);
-        bdry_mesh_mapping->initializeEquationSystems();
-        auto general_mesh_mapping =
             std::make_shared<BoundaryMeshMapping>("BoundaryMesh",
                                                   app_initializer->getComponentDatabase("BoundaryMesh"),
                                                   &mesh,
                                                   fe_data_manager,
                                                   restart_read_dirname,
                                                   restart_restore_num);
+        bdry_mesh_mapping->initializeEquationSystems();
+        auto general_mesh_mapping =
+            std::make_shared<GeneralBoundaryMeshMapping>("GeneralMesh",
+                                                         app_initializer->getComponentDatabase("BoundaryMesh"),
+                                                         &mesh,
+                                                         restart_read_dirname,
+                                                         restart_restore_num);
         general_mesh_mapping->initializeEquationSystems();
         Pointer<CutCellMeshMapping> cut_cell_mapping =
             new CutCellVolumeMeshMapping("CutCellMapping",
@@ -578,7 +522,7 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->registerLevelSetVolFunction(ls_var, ls_fcn);
         sb_adv_diff_integrator->registerGeneralBoundaryMeshMapping(general_mesh_mapping);
         const int w_idx = bdry_mesh_mapping->getWallSitesPatchIndex();
-        std::pair<WallSitesMeshMapping*, BoundaryMeshMapping*> mesh_mappings =
+        std::pair<BoundaryMeshMapping*, GeneralBoundaryMeshMapping*> mesh_mappings =
             std::make_pair(bdry_mesh_mapping.get(), general_mesh_mapping.get());
         auto update_bdry_mesh = [](const double current_time,
                                    const double new_time,
@@ -595,7 +539,7 @@ main(int argc, char* argv[])
                                   const bool /*initial_time*/,
                                   void* ctx) {
             plog << "Spreading wall sites\n";
-            auto bdry_mesh_mapping = static_cast<WallSitesMeshMapping*>(ctx);
+            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
             bdry_mesh_mapping->spreadWallSites();
         };
         time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
@@ -646,13 +590,10 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->registerIntegrateHierarchyCallback(clamp_cell_values, static_cast<void*>(&clamp_vars));
 
         EquationSystems* eq_sys = fe_data_manager->getEquationSystems();
-        EquationSystems* bdry_eq_sys = general_mesh_mapping->getMeshPartitioner()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
-        std::unique_ptr<ExodusII_IO> bdry_io(uses_exodus ? new ExodusII_IO(*general_mesh_mapping->getBoundaryMesh()) :
-                                                           nullptr);
+        //        std::unique_ptr<ExodusII_IO> bdry_io(new ExodusII_IO(*meshes[1]));
         bool from_restart = RestartManager::getManager()->isFromRestart();
         if (exodus_io) exodus_io->append(from_restart);
-        if (bdry_io) bdry_io->append(from_restart);
 
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
@@ -705,8 +646,7 @@ main(int argc, char* argv[])
                 }
                 if (uses_exodus)
                 {
-                    exodus_io->write_timestep(base_mesh_filename, *eq_sys, viz_dump_iteration_num, loop_time);
-                    bdry_io->write_timestep(bdry_mesh_filename, *bdry_eq_sys, viz_dump_iteration_num, loop_time);
+                    exodus_io->write_timestep(exodus_filename, *eq_sys, viz_dump_iteration_num, loop_time);
                 }
 
                 output_net_force(eq_sys, loop_time);
@@ -881,3 +821,80 @@ output_net_force(EquationSystems* equation_systems, const double loop_time)
     }
     return;
 } // postprocess_data
+
+void
+generateMesh(Mesh& mesh, const unsigned int N, double a, double L)
+{
+    double t0 = 0.0;
+    double ell_arc = 2.0 * a * boost::math::ellint_2(1.0 - 1.0 / (a * a));
+    double tmax = 2.0 * L + ell_arc;
+    std::vector<VectorNd> pts;
+    pts.reserve(N + 1);
+    for (unsigned int n = 0; n <= N; ++n)
+    {
+        double t = t0 + (tmax - t0) * n / static_cast<double>(N);
+        if (t < L)
+        {
+            // Initial straight section
+            pts.push_back(VectorNd(t - L - 1.0, 0.0));
+        }
+        else if (t < (L + ell_arc))
+        {
+            // On the ellipse
+            std::pair<double, int> s_iter_pair = find_s_from_t(L, a, t);
+            pout << "Took " << s_iter_pair.second << " iterations\n";
+            double s = s_iter_pair.first;
+            pts.push_back(VectorNd(std::cos(M_PI * (s - 2.0)), a * std::sin(M_PI * (s - 2.0))));
+        }
+        else
+        {
+            // On back straight section
+            double s = (t + L - ell_arc) / L;
+            pts.push_back(VectorNd(L * (s - 2.0) + 1.0, 0.0));
+        }
+    }
+    pout << "pts size: " << pts.size() << "\n";
+
+    mesh.clear();
+    mesh.set_mesh_dimension(NDIM - 1);
+    mesh.set_spatial_dimension(NDIM);
+    mesh.reserve_nodes(N);
+    mesh.reserve_elem(N - 1);
+    unsigned int node_id = 0;
+    for (unsigned int n = 0; n < pts.size(); ++n)
+        mesh.add_point(libMesh::Point(pts[n](0), pts[n](1), 0.0), node_id++, 0);
+
+    for (unsigned int n = 0; n < pts.size() - 1; ++n)
+    {
+        Elem* elem = mesh.add_elem(Elem::build_with_id(EDGE2, n));
+        elem->set_node(0) = mesh.node_ptr(n);
+        elem->set_node(1) = mesh.node_ptr(n + 1);
+    }
+
+    mesh.prepare_for_use(false);
+    mesh.print_info(pout);
+}
+
+std::pair<double, int>
+find_s_from_t(double L, double a, double t)
+{
+    auto fp = [a](const double x) -> double {
+        return -a * M_PI * std::sqrt(1.0 - (1.0 / (a * a)) * std::sin(M_PI * x));
+    };
+    auto f = [t, a, L](const double x) -> double {
+        return t - L -
+               a * (-2.0 * boost::math::ellint_2(1.0 - 1.0 / (a * a)) +
+                    boost::math::ellint_2(1.0 - 1.0 / (a * a), M_PI * x));
+    };
+
+    double s = t;
+    // Do Newton's iterations
+    for (int i = 0; i < 100; ++i)
+    {
+        double snew = s - f(s) / fp(s);
+        double res = std::abs(snew - s);
+        s = snew;
+        if (res < 1.0e-8) return std::make_pair(s, i);
+    }
+    return std::make_pair(std::numeric_limits<double>::quiet_NaN(), -1);
+}
