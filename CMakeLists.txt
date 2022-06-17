@@ -10,7 +10,6 @@ SET(CXX_SRC
     src/CohesionStressRHS.cpp
     src/PlateletSource.cpp
     src/utility_functions.cpp
-    src/WallSitesMeshMapping.cpp
     )
 
 ADD_LIBRARY(Clot)
