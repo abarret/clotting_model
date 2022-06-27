@@ -65,17 +65,14 @@
 #include <fstream>
 #include <iostream>
 
-// Function prototypes
-void output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
-                 Pointer<INSHierarchyIntegrator> ins_integrator,
-                 const int iteration_num,
-                 const double loop_time,
-                 const string& data_dump_dirname);
+// Local includes
+#include "WallSitesMeshMapping.h"
 
+// Function prototypes
 void
-bdry_fcn(const IBTK::VectorNd& /*x*/, double& ls_val)
+bdry_fcn(const IBTK::VectorNd& x, double& ls_val)
 {
-    ls_val = -5.0;
+    ls_val = -1.0 * x(1);
 }
 
 struct BetaFcn
@@ -124,27 +121,6 @@ struct ClampVars
     Pointer<hier::Variable<NDIM>> bond_var;
 };
 
-double A = 1.0;
-double f = 1.0;
-double t_start = 0.0;
-libMesh::Point
-center(const double t)
-{
-    // Return the displacement of the center as a function of time.
-    libMesh::Point d;
-    if (t >= t_start) d(0) = A * std::sin(2.0 * M_PI * (t - t_start) / f);
-    return d;
-}
-
-VectorNd
-center_vel(const double t)
-{
-    // Return the derivative of the displacement
-    VectorNd d(VectorNd::Zero());
-    if (t >= t_start) d[0] = 2.0 * M_PI * A / f * std::cos(2.0 * M_PI * (t - t_start) / f);
-    return d;
-}
-
 namespace ModelData
 {
 static double kappa = 1.0e6;
@@ -167,9 +143,8 @@ tether_force_function(VectorValue<double>& F,
                       void* /*ctx*/)
 {
     const std::vector<double>& U = *var_data[0];
-    const libMesh::Point disp = center(time) + X;
-    for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (disp(d) - x(d)) - eta * (U[d] - center_vel(time)[d]);
-    VectorValue<double> d = disp - x;
+    for (unsigned int d = 0; d < NDIM; ++d) F(d) = kappa * (X(d) - x(d)) - eta * U[d];
+    VectorValue<double> d = X - x;
     if (ERROR_ON_MOVE && d.norm() > 0.25 * dx)
     {
         pout << "displacement: " << d << "\n";
@@ -180,7 +155,7 @@ tether_force_function(VectorValue<double>& F,
         pout << "Ref location: " << X << "\n";
         TBOX_ERROR("Structure has moved too much.\n");
     }
-
+}
 } // namespace ModelData
 using namespace ModelData;
 
@@ -256,6 +231,9 @@ main(int argc, char* argv[])
         eta = input_db->getDouble("ETA");
         dx = input_db->getDouble("DX");
         ERROR_ON_MOVE = input_db->getBool("ERROR_ON_MOVE");
+        double shft = input_db->getDouble("SHFT");
+        libMesh::MeshTools::Modification::translate(mesh, 0, -shft, 0.0);
+        mesh.prepare_for_use();
 
         // Create major algorithm and data objects that comprise the
         // application.  These objects are configured from the input database
@@ -498,39 +476,41 @@ main(int argc, char* argv[])
 
         // Wall sites
         FEDataManager* fe_data_manager = ib_method_ops->getFEDataManager();
+        auto wall_mesh_mapping =
+            std::make_shared<WallSitesMeshMapping>("BoundaryMesh",
+                                                   app_initializer->getComponentDatabase("BoundaryMesh"),
+                                                   &mesh,
+                                                   fe_data_manager,
+                                                   restart_read_dirname,
+                                                   restart_restore_num);
+        wall_mesh_mapping->initializeEquationSystems();
         auto bdry_mesh_mapping =
-            std::make_shared<BoundaryMeshMapping>("BoundaryMesh",
+            std::make_shared<BoundaryMeshMapping>("GeneralMesh",
                                                   app_initializer->getComponentDatabase("BoundaryMesh"),
                                                   &mesh,
                                                   fe_data_manager,
                                                   restart_read_dirname,
                                                   restart_restore_num);
         bdry_mesh_mapping->initializeEquationSystems();
-        auto general_mesh_mapping =
-            std::make_shared<GeneralBoundaryMeshMapping>("GeneralMesh",
-                                                         app_initializer->getComponentDatabase("BoundaryMesh"),
-                                                         &mesh,
-                                                         restart_read_dirname,
-                                                         restart_restore_num);
-        general_mesh_mapping->initializeEquationSystems();
         Pointer<CutCellMeshMapping> cut_cell_mapping =
             new CutCellVolumeMeshMapping("CutCellMapping",
                                          app_initializer->getComponentDatabase("CutCellMapping"),
-                                         general_mesh_mapping->getMeshPartitioner(0));
+                                         bdry_mesh_mapping->getMeshPartitioner(0));
         Pointer<LSFromMesh> ls_fcn = new LSFromMesh("LSFcn", patch_hierarchy, cut_cell_mapping, false);
+        ls_fcn->registerReverseNormal();
         ls_fcn->registerBdryFcn(bdry_fcn);
         sb_adv_diff_integrator->registerLevelSetVolFunction(ls_var, ls_fcn);
-        sb_adv_diff_integrator->registerGeneralBoundaryMeshMapping(general_mesh_mapping);
-        const int w_idx = bdry_mesh_mapping->getWallSitesPatchIndex();
-        std::pair<BoundaryMeshMapping*, GeneralBoundaryMeshMapping*> mesh_mappings =
-            std::make_pair(bdry_mesh_mapping.get(), general_mesh_mapping.get());
+        sb_adv_diff_integrator->registerGeneralBoundaryMeshMapping(bdry_mesh_mapping);
+        const int w_idx = wall_mesh_mapping->getWallSitesPatchIndex();
+        std::pair<BoundaryMeshMapping*, WallSitesMeshMapping*> mesh_mappings =
+            std::make_pair(bdry_mesh_mapping.get(), wall_mesh_mapping.get());
         auto update_bdry_mesh = [](const double current_time,
                                    const double new_time,
                                    bool /*skip_synchronize_new_state_data*/,
                                    int /*num_cycles*/,
                                    void* ctx) {
             plog << "Updating boundary location\n";
-            auto mesh_mappings = static_cast<std::pair<BoundaryMeshMapping*, GeneralBoundaryMeshMapping*>*>(ctx);
+            auto mesh_mappings = static_cast<std::pair<BoundaryMeshMapping*, WallSitesMeshMapping*>*>(ctx);
             mesh_mappings->first->updateBoundaryLocation(current_time, 0, true);
             mesh_mappings->second->updateBoundaryLocation(current_time, 0, true);
         };
@@ -539,12 +519,12 @@ main(int argc, char* argv[])
                                   const bool /*initial_time*/,
                                   void* ctx) {
             plog << "Spreading wall sites\n";
-            auto bdry_mesh_mapping = static_cast<BoundaryMeshMapping*>(ctx);
+            auto bdry_mesh_mapping = static_cast<WallSitesMeshMapping*>(ctx);
             bdry_mesh_mapping->spreadWallSites();
         };
         time_integrator->registerPostprocessIntegrateHierarchyCallback(update_bdry_mesh,
                                                                        static_cast<void*>(&mesh_mappings));
-        time_integrator->registerRegridHierarchyCallback(regrid_callback, static_cast<void*>(bdry_mesh_mapping.get()));
+        time_integrator->registerRegridHierarchyCallback(regrid_callback, static_cast<void*>(wall_mesh_mapping.get()));
         visit_data_writer->registerPlotQuantity("wall_sites", "SCALAR", w_idx);
 
         // define variable blob, which stores the patch hierarchy, variable context, and clamped variables.
@@ -597,11 +577,11 @@ main(int argc, char* argv[])
 
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
-        general_mesh_mapping->initializeFEData();
-        time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
-        bdry_mesh_mapping->getMeshPartitioner()->setPatchHierarchy(patch_hierarchy);
         bdry_mesh_mapping->initializeFEData();
-        bdry_mesh_mapping->setInitialConditions();
+        time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
+        wall_mesh_mapping->getMeshPartitioner()->setPatchHierarchy(patch_hierarchy);
+        wall_mesh_mapping->initializeFEData();
+        wall_mesh_mapping->setInitialConditions();
 
         // Make sure source terms are set correctly.
         cohesion_relax->setOmegaIdx(w_idx);
@@ -682,16 +662,12 @@ main(int argc, char* argv[])
                 RestartManager::getManager()->writeRestartFile(restart_dump_dirname, iteration_num);
                 ib_method_ops->writeFEDataToRestartFile(restart_dump_dirname, iteration_num);
                 bdry_mesh_mapping->writeFEDataToRestartFile(restart_dump_dirname, iteration_num);
-                general_mesh_mapping->writeFEDataToRestartFile(restart_dump_dirname, iteration_num);
+                wall_mesh_mapping->writeFEDataToRestartFile(restart_dump_dirname, iteration_num);
             }
             if (dump_timer_data && (iteration_num % timer_dump_interval == 0 || last_step))
             {
                 pout << "\nWriting timer data...\n\n";
                 TimerManager::getManager()->print(plog);
-            }
-            if (dump_postproc_data && (iteration_num % postproc_data_dump_interval == 0 || last_step))
-            {
-                output_data(patch_hierarchy, time_integrator, iteration_num, loop_time, postproc_data_dump_dirname);
             }
         }
 
@@ -703,35 +679,8 @@ main(int argc, char* argv[])
         }
 
     } // cleanup dynamically allocated objects prior to shutdown
+    return 0;
 } // main
-
-void
-output_data(Pointer<PatchHierarchy<NDIM>> patch_hierarchy,
-            Pointer<INSHierarchyIntegrator> ins_integrator,
-            const int iteration_num,
-            const double loop_time,
-            const string& data_dump_dirname)
-{
-    plog << "writing hierarchy data at iteration " << iteration_num << " to disk" << endl;
-    plog << "simulation time is " << loop_time << endl;
-    string file_name = data_dump_dirname + "/" + "hier_data.";
-    char temp_buf[128];
-    sprintf(temp_buf, "%05d.samrai.%05d", iteration_num, IBTK_MPI::getRank());
-    file_name += temp_buf;
-    Pointer<HDFDatabase> hier_db = new HDFDatabase("hier_db");
-    hier_db->create(file_name);
-    VariableDatabase<NDIM>* var_db = VariableDatabase<NDIM>::getDatabase();
-    ComponentSelector hier_data;
-    hier_data.setFlag(var_db->mapVariableAndContextToIndex(ins_integrator->getVelocityVariable(),
-                                                           ins_integrator->getCurrentContext()));
-    hier_data.setFlag(var_db->mapVariableAndContextToIndex(ins_integrator->getPressureVariable(),
-                                                           ins_integrator->getCurrentContext()));
-    patch_hierarchy->putToDatabase(hier_db->putDatabase("PatchHierarchy"), hier_data);
-    hier_db->putDouble("loop_time", loop_time);
-    hier_db->putInteger("iteration_num", iteration_num);
-    hier_db->close();
-    return;
-} // output_data
 
 void
 output_net_force(EquationSystems* equation_systems, const double loop_time)

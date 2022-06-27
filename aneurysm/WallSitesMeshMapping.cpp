@@ -110,7 +110,7 @@ WallSitesMeshMapping::buildBoundaryMesh()
         // If this element has nodes on the bottom half of the cylinder, delete it.
         for (unsigned int n = 0; n < e->n_nodes(); ++n)
         {
-            if (e->node_ref(n)(1) < 0.5)
+            if (!((e->node_ref(n)(1) < -0.2) && (e->node_ref(n)(0) > 0.0)))
             {
                 bdry_mesh->delete_elem(e);
                 break;
@@ -122,7 +122,7 @@ WallSitesMeshMapping::buildBoundaryMesh()
     {
         Node* n = *it;
         // If the node is on the bottom half of the cylinder, delete it.
-        if ((*n)(1) < 0.5) bdry_mesh->delete_node(n);
+        if (!(((*n)(1) < -0.2) && ((*n)(0) > 0.0))) bdry_mesh->delete_node(n);
     }
     bdry_mesh->prepare_for_use();
     bdry_mesh->print_info();
