@@ -60,8 +60,13 @@ KUA = 2.0
 KUW = 2.0
 WMAX = 1.0
 PL_U_IN = 1.0
+
+// Extra parameters to make sure model doesn't go to far...
 CLOT_BREAK_X = 2.25
 BETA_LIMIT = 300.0
+BDRY_0 = -1.5, -1.5
+BDRY_1 = 6.0, 6.0
+
 
 // solver parameters
 NORMALIZE_VELOCITY = FALSE
@@ -126,6 +131,8 @@ UnactivatedPlatelets
   Kua = KUA
   Kuw = KUW
   wmax = WMAX
+  bdry_0 = BDRY_0
+  bdry_1 = BDRY_1
 }
 
 ActivatedPlatelets
@@ -133,6 +140,8 @@ ActivatedPlatelets
   Kua = KUA
   Kuw = KUW
   wmax = WMAX
+  bdry_0 = BDRY_0
+  bdry_1 = BDRY_1
 }
 
 BondVariable {

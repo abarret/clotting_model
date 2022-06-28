@@ -38,6 +38,8 @@ PlateletSource::PlateletSource(std::string object_name,
     // a0 Constants
     d_Kua = input_db->getDouble("Kua");
     d_Kuw = input_db->getDouble("Kuw");
+    input_db->getDoubleArray("bdry_0", d_bdry_box[0].data(), NDIM);
+    input_db->getDoubleArray("bdry_1", d_bdry_box[1].data(), NDIM);
 
     // scratch index
     auto var_db = VariableDatabase<NDIM>::getDatabase();
@@ -180,12 +182,6 @@ PlateletSource::setDataOnPatch(const int data_idx,
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
     const double* const dx = pgeom->getDx();
     const double* const xlow = pgeom->getXLower();
-
-    std::array<VectorNd, 2> bdrys;
-    bdrys[0](0) = -2.0;
-    bdrys[0](1) = 0.0;
-    bdrys[1](0) = 6.0;
-    bdrys[1](1) = 2.0;
     // It's apparent that when Baaron wrote this, he intended I use them, so I'll ask about this (I think this relates
     // to **)
     Pointer<CellData<NDIM, double>> phi_a_data = patch->getPatchData(d_pl_scr_idx);
@@ -210,7 +206,7 @@ PlateletSource::setDataOnPatch(const int data_idx,
         for (unsigned int d = 0; d < NDIM; ++d)
             x[d] = xlow[d] + dx[d] * (static_cast<double>(idx(d) - idx_low(d)) + 0.5);
         const double eta_a = convolution_mask(
-            1.0, phi_a_data.getPointer(), 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx, x, bdrys);
+            1.0, phi_a_data.getPointer(), 0.0, nullptr, psi_fcn.first, psi_fcn.second, idx, dx, x, d_bdry_box);
         // Compute the f^a_u
         (*F_data)(idx) = d_sign * (d_Kua * phi_u * eta_a + d_Kuw * w * phi_u); // include f^a_u?
     }
