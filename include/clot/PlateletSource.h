@@ -109,6 +109,9 @@ private:
 
     // Note we need our own scratch index with larger ghost width to compute the convolution.
     int d_pl_scr_idx = IBTK::invalid_index;
+
+    // Box outside of which the convolution is turned off.
+    std::array<IBTK::VectorNd, 2> d_bdry_box;
 };
 } // namespace clot
 //////////////////////////////////////////////////////////////////////////////
