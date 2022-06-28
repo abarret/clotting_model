@@ -10,7 +10,6 @@ SET(CXX_SRC
     src/CohesionStressRHS.cpp
     src/PlateletSource.cpp
     src/utility_functions.cpp
-    src/WallSitesMeshMapping.cpp
     )
 
 ADD_LIBRARY(Clot)
@@ -21,4 +20,5 @@ TARGET_LINK_LIBRARIES(Clot PUBLIC ADS::ADS2d)
 
 
 ADD_SUBDIRECTORY(fpc)
+ADD_SUBDIRECTORY(aneurysm)
 ADD_SUBDIRECTORY(tests)

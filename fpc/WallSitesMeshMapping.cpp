@@ -1,4 +1,3 @@
-#include <clot/WallSitesMeshMapping.h>
 #include <clot/app_namespaces.h>
 
 #include <ibamr/IBFEMethod.h>
@@ -11,6 +10,9 @@
 #include <libmesh/boundary_info.h>
 #include <libmesh/enum_xdr_mode.h>
 #include <libmesh/explicit_system.h>
+
+// Local includes
+#include "WallSitesMeshMapping.h"
 
 namespace clot
 {
