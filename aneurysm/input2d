@@ -21,6 +21,7 @@ NX = RATIO*NY                                 // number of grid cells on coarses
 NFINEST = (REF_RATIO^(MAX_LEVELS - 1))*NX  // effective number of grid cells on finest grid level in the X direction
 DX = LX / NFINEST
 VIZ_DUMP_TIME_INTERVAL = 0.1
+SHFT = 0.1 * DX
 
 // Complex Fluid parameters
 FLUID_MODEL = "USER_DEFINED"
@@ -64,8 +65,10 @@ PL_U_IN = 1.0
 // Extra parameters to make sure model doesn't go to far...
 CLOT_BREAK_X = 2.25
 BETA_LIMIT = 300.0
-BDRY_0 = -1.5, -1.5
-BDRY_1 = 6.0, 6.0
+BDRY_0_X = -1.5
+BDRY_0_Y = -1.5
+BDRY_1_X = 6.0
+BDRY_1_Y = 6.0
 
 
 // solver parameters
@@ -131,8 +134,8 @@ UnactivatedPlatelets
   Kua = KUA
   Kuw = KUW
   wmax = WMAX
-  bdry_0 = BDRY_0
-  bdry_1 = BDRY_1
+  bdry_0 = BDRY_0_X, BDRY_0_Y
+  bdry_1 = BDRY_1_X, BDRY_1_Y
 }
 
 ActivatedPlatelets
@@ -140,8 +143,8 @@ ActivatedPlatelets
   Kua = KUA
   Kuw = KUW
   wmax = WMAX
-  bdry_0 = BDRY_0
-  bdry_1 = BDRY_1
+  bdry_0 = BDRY_0_X, BDRY_0_Y
+  bdry_1 = BDRY_1_X, BDRY_1_Y
 }
 
 BondVariable {
