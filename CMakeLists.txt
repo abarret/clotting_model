@@ -7,6 +7,7 @@ FIND_PACKAGE(ADS REQUIRED)
 SET(CXX_SRC
     src/BondSource.cpp
     src/BoundaryMeshMapping.cpp
+    src/BoundVelocityFunction.cpp
     src/CohesionStressRHS.cpp
     src/PlateletSource.cpp
     src/utility_functions.cpp
