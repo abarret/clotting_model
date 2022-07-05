@@ -20,8 +20,8 @@ NX = RATIO*NY                                 // number of grid cells on coarses
 // Note that we use the same grid spacing in both directions
 NFINEST = (REF_RATIO^(MAX_LEVELS - 1))*NX  // effective number of grid cells on finest grid level in the X direction
 DX = LX / NFINEST
-VIZ_DUMP_TIME_INTERVAL = 0.1
-SHFT = 0.1 * DX
+VIZ_DUMP_TIME_INTERVAL = 0.05
+SHFT = 0.0 * DX
 
 // Complex Fluid parameters
 FLUID_MODEL = "USER_DEFINED"
@@ -45,7 +45,7 @@ USE_OUTSIDE_LS_FOR_TAGGING = TRUE
 ADV_INT_METHOD = "MIDPOINT_RULE"
 DIF_INT_METHOD = "TRAPEZOIDAL_RULE"
 USE_RBFS = TRUE
-RBF_STENCIL_SIZE = 5
+RBF_STENCIL_SIZE = 7
 RBF_POLY_ORDER = "LINEAR"
 
 // Model parameters
@@ -170,7 +170,7 @@ BoundaryMesh {
 }
 
 CutCellMapping {
-  perturb_nodes = FALSE
+  perturb_nodes = TRUE
 }
 
 LSCutCellOperator {
@@ -214,7 +214,7 @@ UnactivatedPlateletBcs
   bcoef_function_2 = "1.0"
   bcoef_function_3 = "1.0"
 
-  gcoef_function_0 = "X_1 >= 0.0 ? pl_in : 0.0"
+  gcoef_function_0 = "X_1 >= 0.0 ? (t >= 1.5 ? pl_in : 0.0) : 0.0"
   gcoef_function_1 = "0.0"
   gcoef_function_2 = "0.0"
   gcoef_function_3 = "0.0"
@@ -383,6 +383,7 @@ INSStaggeredHierarchyIntegrator {
    stokes_precond_type = "PROJECTION_PRECONDITIONER"
    stokes_solver_db {
       ksp_type = "fgmres"
+      bdry_interp_type = "QUADRATIC"
    }
 
    velocity_solver_type = "PETSC_KRYLOV_SOLVER"
@@ -511,7 +512,7 @@ TimerManager{
    print_exclusive = FALSE
    print_total     = TRUE
    print_threshold = 0.1
-   timer_list      = "IBAMR::*::*","IBTK::*::*","*::*::*"
+   timer_list      = "IBAMR::*::*","IBTK::*::*","*::*::*","ADS::*::*"
 }
 
 AdvDiffIntegrator {
@@ -537,6 +538,7 @@ diffusion_ts_type = DIF_INT_METHOD
 use_rbfs = USE_RBFS
 rbf_stencil_size = RBF_STENCIL_SIZE
 rbf_poly_order = RBF_POLY_ORDER
+default_adv_reconstruct_type = "LINEAR"
 }
 
 IBHierarchyIntegrator {
