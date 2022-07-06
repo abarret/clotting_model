@@ -8,6 +8,7 @@ SET(CXX_SRC
     src/BondSource.cpp
     src/BoundaryMeshMapping.cpp
     src/CohesionStressRHS.cpp
+    src/DragForcing.cpp
     src/PlateletSource.cpp
     src/utility_functions.cpp
     )
