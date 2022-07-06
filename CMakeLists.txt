@@ -8,7 +8,7 @@ SET(CXX_SRC
     src/BondSource.cpp
     src/BoundaryMeshMapping.cpp
     src/CohesionStressRHS.cpp
-    src/PlateletSource.cpp
+    src/UnactivatedPlateletSource.cpp
     src/utility_functions.cpp
     )
 

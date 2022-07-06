@@ -11,8 +11,8 @@
 //
 // ---------------------------------------------------------------------
 
-#ifndef included_clot_PlateletSource
-#define included_clot_PlateletSource
+#ifndef included_clot_UnactivatedPlateletSource
+#define included_clot_UnactivatedPlateletSource
 
 #include <clot/utility_functions.h>
 
@@ -22,24 +22,24 @@
 namespace clot
 {
 /*!
- * \brief Class PlateletSource provides a source term for the activated platelet concentration.
+ * \brief Class UnactivatedPlateletSource provides a source term for the activated platelet concentration.
  */
-class PlateletSource : public IBTK::CartGridFunction
+class UnactivatedPlateletSource : public IBTK::CartGridFunction
 {
 public:
     /*!
      * \brief Class constructor.
      */
-    PlateletSource(std::string object_name,
-                   SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
-                   SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                   SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                   SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
+    UnactivatedPlateletSource(std::string object_name,
+                              SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+                              SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+                              SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+                              SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
 
     /*!
      * \brief Empty destructor.
      */
-    ~PlateletSource() = default;
+    ~UnactivatedPlateletSource() = default;
 
     /*!
      * \name Methods to set patch data.
@@ -47,7 +47,7 @@ public:
     //\{
 
     /*!
-     * \brief Indicates whether the concrete PlateletSource object is
+     * \brief Indicates whether the concrete UnactivatedPlateletSource object is
      * time-dependent.
      */
     bool isTimeDependent() const override;
@@ -93,15 +93,15 @@ public:
     }
 
 private:
-    PlateletSource() = delete;
+    UnactivatedPlateletSource() = delete;
     double d_Kua = std::numeric_limits<double>::quiet_NaN();
     double d_Kuw = std::numeric_limits<double>::quiet_NaN();
     double d_sign = 1.0;
     Kernel d_kernel = UNKNOWN_KERNEL;
 
-    PlateletSource(const PlateletSource& from) = delete;
+    UnactivatedPlateletSource(const UnactivatedPlateletSource& from) = delete;
 
-    PlateletSource& operator=(const PlateletSource& that) = delete;
+    UnactivatedPlateletSource& operator=(const UnactivatedPlateletSource& that) = delete;
 
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var;
     int d_w_idx = IBTK::invalid_index;
@@ -116,4 +116,4 @@ private:
 } // namespace clot
 //////////////////////////////////////////////////////////////////////////////
 
-#endif //#ifndef included_clot_PlateletSource
+#endif //#ifndef included_clot_UnactivatedPlateletSource
