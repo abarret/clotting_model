@@ -30,7 +30,7 @@ BoundPlateletSource::BoundPlateletSource(std::string object_name,
                                          Pointer<Variable<NDIM>> phi_b_var,
                                          Pointer<Variable<NDIM>> bond_var,
                                          Pointer<Database> input_db)
-    : CartGridFunction(std::move(object_name)), d_phi_b_var(phi_b_var), d_bond_var(bond_var)
+    : CartGridFunction(std::move(object_name))
 {
     // These need to be changed to the relevant parameters
     // a0 Constants
@@ -39,12 +39,15 @@ BoundPlateletSource::BoundPlateletSource(std::string object_name,
     d_nb_max = input_db->getDouble("nb_max");
     d_nw_max = input_db->getDouble("nw_max");
 
+    d_var_integrator_pairs[0].first = phi_b_var;
+    d_var_integrator_pairs[2].first = bond_var;
+
     // scratch indices
     auto var_db = VariableDatabase<NDIM>::getDatabase();
     d_bond_scr_idx =
-        var_db->registerVariableAndContext(d_bond_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
+        var_db->registerVariableAndContext(bond_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     d_phi_b_scr_idx =
-        var_db->registerVariableAndContext(d_phi_b_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
+        var_db->registerVariableAndContext(phi_b_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     return;
 } // BoundPlateletSource
 
@@ -66,7 +69,6 @@ BoundPlateletSource::setDataOnPatchHierarchy(const int data_idx,
     const int coarsest_ln = (coarsest_ln_in == -1 ? 0 : coarsest_ln_in);
     const int finest_ln = (finest_ln_in == -1 ? hierarchy->getFinestLevelNumber() : finest_ln_in);
     // Loop over variables.
-    std::array<Pointer<Variable<NDIM>>, 2> vars = { d_phi_b_var, d_phi_a_var };
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto& var_integrator_pair : d_var_integrator_pairs)
     {
@@ -120,7 +122,6 @@ BoundPlateletSource::setDataOnPatchHierarchy(const int data_idx,
 
     Pointer<Variable<NDIM>> bond_var = d_var_integrator_pairs[2].first;
     Pointer<AdvDiffHierarchyIntegrator> bond_integrator = d_var_integrator_pairs[2].second;
-    auto var_db = VariableDatabase<NDIM>::getDatabase();
     int bond_scr_idx = var_db->mapVariableAndContextToIndex(bond_var, bond_integrator->getScratchContext());
     ghost_fill_comps[1] = ITC(d_bond_scr_idx,
                               bond_scr_idx,
@@ -175,7 +176,6 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
     if (initial_time) return;
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
     const double* const dx = pgeom->getDx();
-    const double* const xlow = pgeom->getXLower();
     Pointer<CellData<NDIM, double>> phi_b_data = patch->getPatchData(d_phi_b_scr_idx);
     Pointer<CellData<NDIM, double>> phi_a_data =
         patch->getPatchData(d_var_integrator_pairs[1].first, d_var_integrator_pairs[1].second->getScratchContext());
@@ -184,14 +184,10 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
         patch->getPatchData(d_var_integrator_pairs[3].first, d_var_integrator_pairs[3].second->getScratchContext());
     Pointer<CellData<NDIM, double>> w_data = patch->getPatchData(d_w_idx);
     const Box<NDIM>& patch_box = patch->getBox();
-    const hier::Index<NDIM>& idx_low = patch_box.lower();
     auto psi_fcn = getKernelAndWidth(d_kernel);
     for (CellIterator<NDIM> ci(patch_box); ci; ci++)
     {
         const CellIndex<NDIM>& idx = ci();
-        VectorNd x;
-        for (unsigned int d = 0; d < NDIM; ++d)
-            x[d] = xlow[d] + dx[d] * (static_cast<double>(idx(d) - idx_low(d)) + 0.5);
         const double w = (*w_data)(idx);
         const double phi_a = (*phi_a_data)(idx);
         const double phi_b = (*phi_b_data)(idx);
@@ -205,8 +201,7 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
                                       psi_fcn.first,
                                       psi_fcn.second,
                                       idx,
-                                      dx,
-                                      x);
+                                      dx);
 
         const double R4 = d_Kaw * d_nw_max * w * phi_a;
         const double f_ab = 1.0 / d_nb * R2 + 1.0 / d_nw * R4;
