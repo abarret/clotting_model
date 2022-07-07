@@ -21,17 +21,17 @@
 #include "tbox/Database.h"
 
 // Local headers
-#include "clot/CohesionStressRHS.h"
+#include "clot/CohesionStressUnactivatedRHS.h"
 
 // Namespace
 namespace clot
 {
-CohesionStressRHS::CohesionStressRHS(Pointer<Variable<NDIM>> phi_u_var,
-                                     Pointer<Variable<NDIM>> phi_a_var,
-                                     Pointer<Variable<NDIM>> z_var,
-                                     const std::string& object_name,
-                                     Pointer<Database> input_db,
-                                     Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator)
+CohesionStressUnactivatedRHS::CohesionStressUnactivatedRHS(Pointer<Variable<NDIM>> phi_u_var,
+                                                           Pointer<Variable<NDIM>> phi_a_var,
+                                                           Pointer<Variable<NDIM>> z_var,
+                                                           const std::string& object_name,
+                                                           Pointer<Database> input_db,
+                                                           Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator)
     : CFRelaxationOperator(object_name, input_db),
       d_phi_u_var(phi_u_var),
       d_phi_a_var(phi_a_var),
@@ -49,13 +49,13 @@ CohesionStressRHS::CohesionStressRHS(Pointer<Variable<NDIM>> phi_u_var,
 } // Constructor
 
 void
-CohesionStressRHS::setDataOnPatchHierarchy(const int data_idx,
-                                           Pointer<Variable<NDIM>> var,
-                                           Pointer<PatchHierarchy<NDIM>> hierarchy,
-                                           const double data_time,
-                                           const bool initial_time,
-                                           const int coarsest_ln_in,
-                                           const int finest_ln_in)
+CohesionStressUnactivatedRHS::setDataOnPatchHierarchy(const int data_idx,
+                                                      Pointer<Variable<NDIM>> var,
+                                                      Pointer<PatchHierarchy<NDIM>> hierarchy,
+                                                      const double data_time,
+                                                      const bool initial_time,
+                                                      const int coarsest_ln_in,
+                                                      const int finest_ln_in)
 {
     // This implementation atm is identical to ActivatePlatelet Source
     // Loop over variables.
@@ -135,12 +135,12 @@ CohesionStressRHS::setDataOnPatchHierarchy(const int data_idx,
 } // setDataOnPatchHierarchy
 
 void
-CohesionStressRHS::setDataOnPatch(const int data_idx,
-                                  Pointer<Variable<NDIM>> /*var*/,
-                                  Pointer<Patch<NDIM>> patch,
-                                  const double data_time,
-                                  const bool initial_time,
-                                  Pointer<PatchLevel<NDIM>> /*patch_level*/)
+CohesionStressUnactivatedRHS::setDataOnPatch(const int data_idx,
+                                             Pointer<Variable<NDIM>> /*var*/,
+                                             Pointer<Patch<NDIM>> patch,
+                                             const double data_time,
+                                             const bool initial_time,
+                                             Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     const Box<NDIM>& patch_box = patch->getBox();
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
@@ -203,12 +203,4 @@ CohesionStressRHS::setDataOnPatch(const int data_idx,
 #endif
     }
 } // setDataOnPatch
-
-void
-CohesionStressRHS::registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta)
-{
-    // We set beta here
-    d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
-}
-
 } // namespace clot

@@ -16,7 +16,7 @@
 
 #include <clot/BondSource.h>
 #include <clot/BoundaryMeshMapping.h>
-#include <clot/CohesionStressRHS.h>
+#include <clot/CohesionStressUnactivatedRHS.h>
 #include <clot/UnactivatedPlateletSource.h>
 #include <clot/app_namespaces.h>
 
@@ -424,13 +424,13 @@ main(int argc, char* argv[])
                              adv_diff_integrator,
                              visit_data_writer);
         ins_integrator->registerBodyForceFunction(cohesionStressForcing);
-        Pointer<CohesionStressRHS> cohesion_relax =
-            new CohesionStressRHS(phi_u_var,
-                                  phi_a_var,
-                                  bond_var,
-                                  "CohesionRHS",
-                                  app_initializer->getComponentDatabase("CohesionRHS"),
-                                  sb_adv_diff_integrator);
+        Pointer<CohesionStressUnactivatedRHS> cohesion_relax =
+            new CohesionStressUnactivatedRHS(phi_u_var,
+                                             phi_a_var,
+                                             bond_var,
+                                             "CohesionRHS",
+                                             app_initializer->getComponentDatabase("CohesionRHS"),
+                                             sb_adv_diff_integrator);
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
 
         double beta_0 = input_db->getDouble("BETA_0");

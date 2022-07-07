@@ -13,8 +13,8 @@
 
 /////////////////////////////// INCLUDE GUARD ////////////////////////////////
 
-#ifndef included_clot_CohesionStressRHS
-#define included_clot_CohesionStressRHS
+#ifndef included_clot_CohesionStressUnactivatedRHS
+#define included_clot_CohesionStressUnactivatedRHS
 
 /////////////////////////////// INCLUDES /////////////////////////////////////
 
@@ -49,47 +49,47 @@
 namespace clot
 {
 /*!
- * \brief Class CohesionStressRHS is a concrete CFRelaxationOperator that computes the relaxation function for the
- * clotting model.
+ * \brief Class CohesionStressUnactivatedRHS is a concrete CFRelaxationOperator that computes the relaxation function
+ * for the clotting model. This class is for the model that has unactivated and activated platelets.
  */
-class CohesionStressRHS : public IBAMR::CFRelaxationOperator
+class CohesionStressUnactivatedRHS : public IBAMR::CFRelaxationOperator
 {
 public:
     /*!
      * \brief This constructor reads in the parameters for the model from the input database.
      */
-    CohesionStressRHS(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
-                      SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-                      SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
-                      const std::string& object_name,
-                      SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-                      SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_integrator);
+    CohesionStressUnactivatedRHS(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
+                                 const std::string& object_name,
+                                 SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+                                 SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_integrator);
 
     /*!
      * \brief Default constructor.
      *
      * \note This constructor is not implemented and should not be used.
      */
-    CohesionStressRHS() = delete;
+    CohesionStressUnactivatedRHS() = delete;
 
     /*!
      * \brief Copy constructor.
      *
      * \note This constructor is not implemented and should not be used.
      */
-    CohesionStressRHS(const CohesionStressRHS& from) = delete;
+    CohesionStressUnactivatedRHS(const CohesionStressUnactivatedRHS& from) = delete;
 
     /*!
      * \brief Assignment operator.
      *
      * \note This operator is not implemented and should not be used.
      */
-    CohesionStressRHS& operator=(const CohesionStressRHS& that) = delete;
+    CohesionStressUnactivatedRHS& operator=(const CohesionStressUnactivatedRHS& that) = delete;
 
     /*!
      * \brief Empty destructor.
      */
-    ~CohesionStressRHS() = default;
+    ~CohesionStressUnactivatedRHS() = default;
 
     /*!
      * \name Methods to set patch data.
@@ -120,7 +120,11 @@ public:
 
     //\}
 
-    void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
+    inline void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta)
+    {
+        // We set beta here
+        d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
+    }
 
     inline void setOmegaIdx(const int w_idx)
     {
