@@ -22,7 +22,10 @@
 namespace clot
 {
 /*!
- * \brief Class UnactivatedPlateletSource provides a source term for the activated platelet concentration.
+ * \brief Class UnactivatedPlateletSource provides a source term for the unactivated and activated platelet
+ * concentration.
+ *
+ * \note This is used in the iteration of the model that has unactivated and activated platelets only.
  */
 class UnactivatedPlateletSource : public IBTK::CartGridFunction
 {
@@ -35,6 +38,15 @@ public:
                               SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
                               SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
                               SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_hier_integrator);
+
+    /*!
+     * \brief Deleted default constructors.
+     */
+    //\{
+    UnactivatedPlateletSource() = delete;
+    UnactivatedPlateletSource(const UnactivatedPlateletSource& from) = delete;
+    UnactivatedPlateletSource& operator=(const UnactivatedPlateletSource& that) = delete;
+    //\}
 
     /*!
      * \brief Empty destructor.
@@ -93,15 +105,10 @@ public:
     }
 
 private:
-    UnactivatedPlateletSource() = delete;
     double d_Kua = std::numeric_limits<double>::quiet_NaN();
     double d_Kuw = std::numeric_limits<double>::quiet_NaN();
     double d_sign = 1.0;
     Kernel d_kernel = UNKNOWN_KERNEL;
-
-    UnactivatedPlateletSource(const UnactivatedPlateletSource& from) = delete;
-
-    UnactivatedPlateletSource& operator=(const UnactivatedPlateletSource& that) = delete;
 
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var;
     int d_w_idx = IBTK::invalid_index;
