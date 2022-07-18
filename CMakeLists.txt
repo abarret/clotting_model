@@ -6,10 +6,11 @@ FIND_PACKAGE(ADS REQUIRED)
 
 SET(CXX_SRC
     src/BondSource.cpp
+    src/BoundPlateletSource.cpp
     src/BoundaryMeshMapping.cpp
     src/BoundVelocityFunction.cpp
     src/CohesionStressRHS.cpp
-    src/PlateletSource.cpp
+    src/UnactivatedPlateletSource.cpp
     src/utility_functions.cpp
     )
 

@@ -17,7 +17,7 @@
 #include <clot/BondSource.h>
 #include <clot/BoundaryMeshMapping.h>
 #include <clot/CohesionStressRHS.h>
-#include <clot/PlateletSource.h>
+#include <clot/UnactivatedPlateletSource.h>
 #include <clot/app_namespaces.h>
 
 #include <ADS/CutCellVolumeMeshMapping.h>
@@ -404,12 +404,12 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_u_src_var = new CellVariable<NDIM, double>("phi_u_src");
         sb_adv_diff_integrator->setAdvectionVelocity(phi_u_var, ins_integrator->getAdvectionVelocityVariable());
         sb_adv_diff_integrator->setDiffusionCoefficient(phi_u_var, input_db->getDouble("UNACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_u_src_fcn =
-            new PlateletSource("UnactivatedPlatelets",
-                               phi_u_var,
-                               phi_a_var,
-                               app_initializer->getComponentDatabase("ActivatedPlatelets"),
-                               sb_adv_diff_integrator);
+        Pointer<UnactivatedPlateletSource> phi_u_src_fcn =
+            new UnactivatedPlateletSource("UnactivatedPlatelets",
+                                          phi_u_var,
+                                          phi_a_var,
+                                          app_initializer->getComponentDatabase("ActivatedPlatelets"),
+                                          sb_adv_diff_integrator);
         phi_u_src_fcn->setSign(false);
         phi_u_src_fcn->setKernel(BSPLINE_3);
         sb_adv_diff_integrator->registerSourceTerm(phi_u_src_var);
@@ -430,12 +430,12 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
         sb_adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
         sb_adv_diff_integrator->setDiffusionCoefficient(phi_a_var, input_db->getDouble("ACTIVATED_DIFFUSION_COEF"));
-        Pointer<PlateletSource> phi_a_src_fcn =
-            new PlateletSource("ActivatedPlatelets",
-                               phi_u_var,
-                               phi_a_var,
-                               app_initializer->getComponentDatabase("ActivatedPlatelets"),
-                               sb_adv_diff_integrator);
+        Pointer<UnactivatedPlateletSource> phi_a_src_fcn =
+            new UnactivatedPlateletSource("ActivatedPlatelets",
+                                          phi_u_var,
+                                          phi_a_var,
+                                          app_initializer->getComponentDatabase("ActivatedPlatelets"),
+                                          sb_adv_diff_integrator);
         phi_a_src_fcn->setSign(true);
         phi_a_src_fcn->setKernel(BSPLINE_3);
         sb_adv_diff_integrator->registerSourceTerm(phi_a_src_var);

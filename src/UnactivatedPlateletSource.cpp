@@ -13,7 +13,7 @@
 
 #include <ibamr/config.h>
 
-#include <clot/PlateletSource.h>
+#include <clot/UnactivatedPlateletSource.h>
 #include <clot/app_namespaces.h>
 
 #include <HierarchyDataOpsManager.h>
@@ -24,11 +24,11 @@ namespace clot
 {
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
-PlateletSource::PlateletSource(std::string object_name,
-                               Pointer<Variable<NDIM>> phi_u_var,
-                               Pointer<Variable<NDIM>> phi_a_var,
-                               Pointer<Database> input_db,
-                               Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
+UnactivatedPlateletSource::UnactivatedPlateletSource(std::string object_name,
+                                                     Pointer<Variable<NDIM>> phi_u_var,
+                                                     Pointer<Variable<NDIM>> phi_a_var,
+                                                     Pointer<Database> input_db,
+                                                     Pointer<AdvDiffHierarchyIntegrator> adv_diff_hier_integrator)
     : CartGridFunction(std::move(object_name)),
       d_phi_u_var(phi_u_var),
       d_phi_a_var(phi_a_var),
@@ -46,22 +46,22 @@ PlateletSource::PlateletSource(std::string object_name,
     d_pl_scr_idx =
         var_db->registerVariableAndContext(d_phi_a_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     return;
-} // PlateletSource
+} // UnactivatedPlateletSource
 
 bool
-PlateletSource::isTimeDependent() const
+UnactivatedPlateletSource::isTimeDependent() const
 {
     return true;
 } // isTimeDependent
 
 void
-PlateletSource::setDataOnPatchHierarchy(const int data_idx,
-                                        Pointer<Variable<NDIM>> var,
-                                        Pointer<PatchHierarchy<NDIM>> hierarchy,
-                                        const double data_time,
-                                        const bool initial_time,
-                                        const int coarsest_ln_in,
-                                        const int finest_ln_in)
+UnactivatedPlateletSource::setDataOnPatchHierarchy(const int data_idx,
+                                                   Pointer<Variable<NDIM>> var,
+                                                   Pointer<PatchHierarchy<NDIM>> hierarchy,
+                                                   const double data_time,
+                                                   const bool initial_time,
+                                                   const int coarsest_ln_in,
+                                                   const int finest_ln_in)
 {
     const int coarsest_ln = (coarsest_ln_in == -1 ? 0 : coarsest_ln_in);
     const int finest_ln = (finest_ln_in == -1 ? hierarchy->getFinestLevelNumber() : finest_ln_in);
@@ -169,12 +169,12 @@ PlateletSource::setDataOnPatchHierarchy(const int data_idx,
 } // setDataOnPatchHierarchy
 
 void
-PlateletSource::setDataOnPatch(const int data_idx,
-                               Pointer<Variable<NDIM>> /*var*/,
-                               Pointer<Patch<NDIM>> patch,
-                               const double /*data_time*/,
-                               const bool initial_time,
-                               Pointer<PatchLevel<NDIM>> /*patch_level*/)
+UnactivatedPlateletSource::setDataOnPatch(const int data_idx,
+                                          Pointer<Variable<NDIM>> /*var*/,
+                                          Pointer<Patch<NDIM>> patch,
+                                          const double /*data_time*/,
+                                          const bool initial_time,
+                                          Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     Pointer<CellData<NDIM, double>> F_data = patch->getPatchData(data_idx);
     F_data->fillAll(0.0);

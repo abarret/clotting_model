@@ -88,7 +88,10 @@ public:
                         SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> patch_level =
                             SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>>(NULL)) override;
 
-    void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta);
+    inline void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta)
+    {
+        d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
+    }
 
     inline void setWIdx(const int w_idx)
     {
