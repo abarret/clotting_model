@@ -14,7 +14,7 @@
 // Config files
 #include <ibamr/config.h>
 
-#include <clot/BondSource.h>
+#include <clot/BondUnactivatedSource.h>
 #include <clot/BoundaryMeshMapping.h>
 #include <clot/CohesionStressUnactivatedRHS.h>
 #include <clot/UnactivatedPlateletSource.h>
@@ -455,13 +455,14 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
         sb_adv_diff_integrator->setAdvectionVelocity(bond_var, ins_integrator->getAdvectionVelocityVariable());
         sb_adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
-        Pointer<BondSource> bond_src_fcn = new BondSource(phi_u_var,
-                                                          phi_a_var,
-                                                          bond_var,
-                                                          sig_var,
-                                                          app_initializer->getComponentDatabase("BondVariable"),
-                                                          adv_diff_integrator,
-                                                          sb_adv_diff_integrator);
+        Pointer<BondUnactivatedSource> bond_src_fcn =
+            new BondUnactivatedSource(phi_u_var,
+                                      phi_a_var,
+                                      bond_var,
+                                      sig_var,
+                                      app_initializer->getComponentDatabase("BondVariable"),
+                                      adv_diff_integrator,
+                                      sb_adv_diff_integrator);
         bond_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
         sb_adv_diff_integrator->registerSourceTerm(bond_src_var);
         sb_adv_diff_integrator->setSourceTermFunction(bond_src_var, bond_src_fcn);

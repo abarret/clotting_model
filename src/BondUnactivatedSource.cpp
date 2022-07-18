@@ -13,7 +13,7 @@
 
 #include <ibamr/config.h>
 
-#include <clot/BondSource.h>
+#include <clot/BondUnactivatedSource.h>
 #include <clot/app_namespaces.h>
 
 #include <HierarchyDataOpsManager.h>
@@ -23,13 +23,13 @@
 namespace clot
 {
 /////////////////////////////// PUBLIC ///////////////////////////////////////
-BondSource::BondSource(Pointer<hier::Variable<NDIM>> phi_u_var,
-                       Pointer<hier::Variable<NDIM>> phi_a_var,
-                       Pointer<hier::Variable<NDIM>> z_var,
-                       Pointer<hier::Variable<NDIM>> sig_var,
-                       Pointer<Database> input_db,
-                       Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator,
-                       Pointer<AdvDiffHierarchyIntegrator> sb_adv_diff_integrator)
+BondUnactivatedSource::BondUnactivatedSource(Pointer<hier::Variable<NDIM>> phi_u_var,
+                                             Pointer<hier::Variable<NDIM>> phi_a_var,
+                                             Pointer<hier::Variable<NDIM>> z_var,
+                                             Pointer<hier::Variable<NDIM>> sig_var,
+                                             Pointer<Database> input_db,
+                                             Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator,
+                                             Pointer<AdvDiffHierarchyIntegrator> sb_adv_diff_integrator)
     : d_phi_u_var(phi_u_var),
       d_phi_a_var(phi_a_var),
       d_z_var(z_var),
@@ -42,22 +42,22 @@ BondSource::BondSource(Pointer<hier::Variable<NDIM>> phi_u_var,
     d_a0w = input_db->getDouble("a0w");
     d_beta_limit = input_db->getDoubleWithDefault("beta_limit", 300.0);
     d_clot_break_x = input_db->getDoubleWithDefault("clot_break_x", 2.25);
-} // BondSource
+} // BondUnactivatedSource
 
 bool
-BondSource::isTimeDependent() const
+BondUnactivatedSource::isTimeDependent() const
 {
     return true;
 } // isTimeDependent
 
 void
-BondSource::setDataOnPatchHierarchy(const int data_idx,
-                                    Pointer<Variable<NDIM>> var,
-                                    Pointer<PatchHierarchy<NDIM>> hierarchy,
-                                    const double data_time,
-                                    const bool initial_time,
-                                    const int coarsest_ln_in,
-                                    const int finest_ln_in)
+BondUnactivatedSource::setDataOnPatchHierarchy(const int data_idx,
+                                               Pointer<Variable<NDIM>> var,
+                                               Pointer<PatchHierarchy<NDIM>> hierarchy,
+                                               const double data_time,
+                                               const bool initial_time,
+                                               const int coarsest_ln_in,
+                                               const int finest_ln_in)
 {
     // This implementation atm is identical to ActivatePlatelet Source
     // Loop over variables.
@@ -144,12 +144,12 @@ BondSource::setDataOnPatchHierarchy(const int data_idx,
 } // setDataOnPatchHierarchy
 
 void
-BondSource::setDataOnPatch(const int data_idx,
-                           Pointer<Variable<NDIM>> /*var*/,
-                           Pointer<Patch<NDIM>> patch,
-                           const double /*data_time*/,
-                           const bool initial_time,
-                           Pointer<PatchLevel<NDIM>> /*patch_level*/)
+BondUnactivatedSource::setDataOnPatch(const int data_idx,
+                                      Pointer<Variable<NDIM>> /*var*/,
+                                      Pointer<Patch<NDIM>> patch,
+                                      const double /*data_time*/,
+                                      const bool initial_time,
+                                      Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     // Computes alpha - beta * z
     Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(data_idx);
