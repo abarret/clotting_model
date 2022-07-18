@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (c) 2019 - 2020 by the IBAMR developers
+// Copyright (c) 2014 - 2014 by the IBAMR developers
 // All rights reserved.
 //
 // This file is part of IBAMR.
@@ -11,18 +11,12 @@
 //
 // ---------------------------------------------------------------------
 
-/////////////////////////////// INCLUDE GUARD ////////////////////////////////
-
-#ifndef included_clot_CohesionStressBoundRHS
-#define included_clot_CohesionStressBoundRHS
-
-/////////////////////////////// INCLUDES /////////////////////////////////////
-
-#include <ibamr/config.h>
+#ifndef included_clot_BondBoundSource
+#define included_clot_BondBoundSource
 
 #include <clot/utility_functions.h>
 
-#include <ibamr/CFRelaxationOperator.h>
+#include <ibamr/AdvDiffHierarchyIntegrator.h>
 
 #include <tbox/Database.h>
 #include <tbox/Pointer.h>
@@ -42,37 +36,65 @@
 #include <Variable.h>
 
 #include <functional>
-#include <string>
 
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
-
 namespace clot
 {
 /*!
- * \brief Class CohesionStressBoundRHS is a concrete CFRelaxationOperator that computes the relaxation function for the
- * clotting model. This model assumes activated and bound platelets.
+ * Class BondBoundSource is a concrete CartGridFunction that implements the growth and decay terms for the bond
+ * variable.
+ *
+ * Note this function should only be used for the model that has unactivated and activated platelets.
  */
-class CohesionStressBoundRHS : public IBAMR::CFRelaxationOperator
+class BondBoundSource : public IBTK::CartGridFunction
 {
 public:
     /*!
-     * \brief This constructor reads in the parameters for the model from the input database.
+     * \brief Class constructor.
      */
-    CohesionStressBoundRHS(std::string object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    BondBoundSource(std::string object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+
+    /*!
+     * \brief Empty destructor.
+     */
+    ~BondBoundSource() = default;
 
     /*!
      * \brief Deleted constructors
      */
     //\{
-    CohesionStressBoundRHS() = delete;
-    CohesionStressBoundRHS(const CohesionStressBoundRHS& from) = delete;
-    CohesionStressBoundRHS& operator=(const CohesionStressBoundRHS& that) = delete;
+    BondBoundSource(const BondBoundSource& from) = delete;
+    BondBoundSource& operator=(const BondBoundSource& that) = delete;
     //\}
 
     /*!
-     * \brief Empty destructor.
+     * \brief Indicates whether the concrete BondBoundSource object is
+     * time-dependent.
      */
-    ~CohesionStressBoundRHS();
+    bool isTimeDependent() const override;
+
+    /*!
+     * \brief Evaluate the function on the patch interiors on the specified
+     * levels of the patch hierarchy.
+     */
+    void setDataOnPatchHierarchy(const int data_idx,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                                 SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> hierarchy,
+                                 const double data_time,
+                                 const bool initial_time = false,
+                                 const int coarsest_ln = -1,
+                                 const int finest_ln = -1) override;
+
+    /*!
+     * \brief Evaluate the function on the patch interior.
+     */
+    void setDataOnPatch(const int data_idx,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
+                        const double data_time,
+                        const bool initial_time = false,
+                        SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> patch_level =
+                            SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>>(NULL)) override;
 
     /*!
      * \brief Methods to set the inputs
@@ -88,12 +110,14 @@ public:
         d_phi_b_scr_idx =
             var_db->registerVariableAndContext(var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     }
+
     void setActivatedPlateletData(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
                                   SAMRAI::tbox::Pointer<IBTK::HierarchyIntegrator> integrator)
     {
         d_var_integrator_pairs[1].first = var;
         d_var_integrator_pairs[1].second = integrator;
     }
+
     void setBondData(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
                      SAMRAI::tbox::Pointer<IBTK::HierarchyIntegrator> integrator)
     {
@@ -105,13 +129,19 @@ public:
             var_db->registerVariableAndContext(var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     }
 
+    void setStressData(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
+                       SAMRAI::tbox::Pointer<IBTK::HierarchyIntegrator> integrator)
+    {
+        d_var_integrator_pairs[3].first = var;
+        d_var_integrator_pairs[3].second = integrator;
+    }
+
     inline void registerBetaFcn(std::function<double(double, void*)> wrapper, void* beta)
     {
-        // We set beta here
         d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
     }
 
-    inline void setOmegaIdx(const int w_idx)
+    inline void setWIdx(const int w_idx)
     {
         d_w_idx = w_idx;
     }
@@ -122,44 +152,16 @@ public:
     }
     //\}
 
-    /*!
-     * \name Methods to set patch data.
-     */
-    //\{
-
-    /*!
-     * \brief Evaluate the function on the patch interiors on the specified
-     * levels of the patch hierarchy.
-     */
-    void setDataOnPatchHierarchy(const int data_idx,
-                                 SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
-                                 SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> hierarchy,
-                                 const double data_time,
-                                 const bool initial_time = false,
-                                 const int coarsest_ln = -1,
-                                 const int finest_ln = -1) override;
-    /*!
-     * \brief Evaluate the function on the patch interior.
-     */
-    void setDataOnPatch(const int data_idx,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> var,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
-                        const double data_time,
-                        const bool initial_time = false,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> patch_level =
-                            SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>>(NULL)) override;
-    //\}
-
 private:
-    double d_c4 = std::numeric_limits<double>::quiet_NaN(), d_Kab = std::numeric_limits<double>::quiet_NaN(),
-           d_Kbb = std::numeric_limits<double>::quiet_NaN(), d_Kaw = std::numeric_limits<double>::quiet_NaN(),
-           d_nb_max = std::numeric_limits<double>::quiet_NaN(), d_nw_max = std::numeric_limits<double>::quiet_NaN();
+    double d_Kab = std::numeric_limits<double>::quiet_NaN(), d_Kbb = std::numeric_limits<double>::quiet_NaN(),
+           d_Kaw = std::numeric_limits<double>::quiet_NaN(), d_nb_max = std::numeric_limits<double>::quiet_NaN(),
+           d_nw_max = std::numeric_limits<double>::quiet_NaN();
 
     Kernel d_kernel = UNKNOWN_KERNEL;
 
     std::array<std::pair<SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>>,
                          SAMRAI::tbox::Pointer<IBTK::HierarchyIntegrator>>,
-               3>
+               4>
         d_var_integrator_pairs;
     int d_w_idx = IBTK::invalid_index;
 
@@ -169,8 +171,9 @@ private:
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
 
-    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_adv_diff_integrator;
+    // wall index
+    int d_w_idx = IBTK::invalid_index;
 };
+} // namespace clot
 
-} // Namespace clot
 #endif

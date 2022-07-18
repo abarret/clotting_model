@@ -5,6 +5,7 @@ FIND_PACKAGE(IBAMR REQUIRED)
 FIND_PACKAGE(ADS REQUIRED)
 
 SET(CXX_SRC
+    src/BondBoundSource.cpp
     src/BondUnactivatedSource.cpp
     src/BoundPlateletSource.cpp
     src/BoundaryMeshMapping.cpp
