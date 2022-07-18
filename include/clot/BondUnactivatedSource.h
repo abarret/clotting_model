@@ -11,8 +11,8 @@
 //
 // ---------------------------------------------------------------------
 
-#ifndef included_clot_BondSource
-#define included_clot_BondSource
+#ifndef included_clot_BondUnactivatedSource
+#define included_clot_BondUnactivatedSource
 
 #include <clot/utility_functions.h>
 
@@ -40,27 +40,33 @@
 /////////////////////////////// CLASS DEFINITION /////////////////////////////
 namespace clot
 {
-class BondSource : public IBTK::CartGridFunction
+/*!
+ * Class BondUnactivatedSource is a concrete CartGridFunction that implements the growth and decay terms for the bond
+ * variable.
+ *
+ * Note this function should only be used for the model that has unactivated and activated platelets.
+ */
+class BondUnactivatedSource : public IBTK::CartGridFunction
 {
 public:
     /*!
      * \brief Class constructor.
      */
-    BondSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
-               SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
-               SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
-               SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
-               SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
-               SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_integrator,
-               SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> sb_adv_diff_integrator);
+    BondUnactivatedSource(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_u_var,
+                          SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
+                          SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> z_var,
+                          SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
+                          SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+                          SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> adv_diff_integrator,
+                          SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> sb_adv_diff_integrator);
 
     /*!
      * \brief Empty destructor.
      */
-    ~BondSource() = default;
+    ~BondUnactivatedSource() = default;
 
     /*!
-     * \brief Indicates whether the concrete BondSource object is
+     * \brief Indicates whether the concrete BondUnactivatedSource object is
      * time-dependent.
      */
     bool isTimeDependent() const override;
@@ -114,8 +120,8 @@ private:
     std::function<double(double)> d_beta_fcn;
 
     // OTHER THINGS
-    BondSource(const BondSource& from) = delete;
-    BondSource& operator=(const BondSource& that) = delete;
+    BondUnactivatedSource(const BondUnactivatedSource& from) = delete;
+    BondUnactivatedSource& operator=(const BondUnactivatedSource& that) = delete;
     SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> d_phi_u_var, d_phi_a_var, d_z_var, d_sig_var;
     SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_adv_diff_integrator, d_sb_adv_diff_integrator;
 };

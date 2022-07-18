@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (c) 2019 - 2020 by the IBAMR developers
+// Copyright (c) 2014 - 2020 by the IBAMR developers
 // All rights reserved.
 //
 // This file is part of IBAMR.
@@ -11,51 +11,43 @@
 //
 // ---------------------------------------------------------------------
 
-#include "ibamr/app_namespaces.h" // IWYU pragma: keep
+#include <ibamr/config.h>
 
-#include "ibtk/ibtk_utilities.h"
+#include <clot/BondBoundSource.h>
+#include <clot/app_namespaces.h>
 
-#include "CellData.h"
-#include "CellIterator.h"
-#include "Patch.h"
-#include "tbox/Database.h"
+#include <HierarchyDataOpsManager.h>
+#include <SAMRAI_config.h>
+#include <math.h>
 
-// Local headers
-#include "clot/CohesionStressBoundRHS.h"
-
-// Namespace
 namespace clot
 {
-CohesionStressBoundRHS::CohesionStressBoundRHS(std::string object_name, Pointer<Database> input_db)
-    : CFRelaxationOperator(std::move(object_name), input_db)
+/////////////////////////////// PUBLIC ///////////////////////////////////////
+BondBoundSource::BondBoundSource(std::string object_name, Pointer<Database> input_db)
+    : CartGridFunction(std::move(object_name))
 {
     // Get values from input
-    d_c4 = input_db->getDouble("c4");
     d_Kab = input_db->getDouble("kab");
     d_Kbb = input_db->getDouble("kbb");
     d_Kaw = input_db->getDouble("kaw");
     d_nb_max = input_db->getDouble("nb_max");
     d_nw_max = input_db->getDouble("nw_max");
-    return;
-} // Constructor
+} // BondBoundSource
 
-CohesionStressBoundRHS::~CohesionStressBoundRHS()
+bool
+BondBoundSource::isTimeDependent() const
 {
-    for (auto& var_integrator_pair : d_var_integrator_pairs)
-    {
-        var_integrator_pair.first = nullptr;
-        var_integrator_pair.second = nullptr;
-    }
-}
+    return true;
+} // isTimeDependent
 
 void
-CohesionStressBoundRHS::setDataOnPatchHierarchy(const int data_idx,
-                                                Pointer<Variable<NDIM>> var,
-                                                Pointer<PatchHierarchy<NDIM>> hierarchy,
-                                                const double data_time,
-                                                const bool initial_time,
-                                                int coarsest_ln,
-                                                int finest_ln)
+BondBoundSource::setDataOnPatchHierarchy(const int data_idx,
+                                         Pointer<Variable<NDIM>> var,
+                                         Pointer<PatchHierarchy<NDIM>> hierarchy,
+                                         const double data_time,
+                                         const bool initial_time,
+                                         const int coarsest_ln,
+                                         const int finest_ln)
 {
     coarsest_ln = (coarsest_ln == -1 ? 0 : coarsest_ln);
     finest_ln = (finest_ln == -1 ? hierarchy->getFinestLevelNumber() : finest_ln);
@@ -143,12 +135,12 @@ CohesionStressBoundRHS::setDataOnPatchHierarchy(const int data_idx,
 } // setDataOnPatchHierarchy
 
 void
-CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
-                                       Pointer<Variable<NDIM>> /*var*/,
-                                       Pointer<Patch<NDIM>> patch,
-                                       const double data_time,
-                                       const bool initial_time,
-                                       Pointer<PatchLevel<NDIM>> /*patch_level*/)
+BondBoundSource::setDataOnPatch(const int data_idx,
+                                Pointer<Variable<NDIM>> /*var*/,
+                                Pointer<Patch<NDIM>> patch,
+                                const double /*data_time*/,
+                                const bool initial_time,
+                                Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
     Pointer<CellData<NDIM, double>> ret_data = patch->getPatchData(data_idx);
     ret_data->fillAll(0.0);
@@ -159,7 +151,8 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
     const double* const dx = pgeom->getDx();
 
-    Pointer<CellData<NDIM, double>> sig_data = patch->getPatchData(d_W_cc_idx);
+    Pointer<CellData<NDIM, double>> sig_data =
+        patch->getPatchData(d_var_integrator_pairs[3].first, d_var_integrator_pairs[3].second->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_a_data =
         patch->getPatchData(d_var_integrator_pairs[1].first, d_var_integrator_pairs[1].second->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_b_data = patch->getPatchData(d_phi_b_scr_idx);
@@ -193,20 +186,8 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
         const double y_brackets = trace / (z + 1.0e-8);
         double beta = d_beta_fcn(y_brackets);
-#if (NDIM == 2)
-        (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*sig_data)(idx, 0);
-        (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*sig_data)(idx, 1);
-        (*ret_data)(idx, 2) = -beta * (*sig_data)(idx, 2);
-#endif
-#if (NDIM == 3)
-        (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*sig_data)(idx, 0);
-        (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*sig_data)(idx, 1);
-        (*ret_data)(idx, 2) = d_c4 * alpha - beta * (*sig_data)(idx, 2);
-        (*ret_data)(idx, 3) = -beta * (*sig_data)(idx, 3);
-        (*ret_data)(idx, 4) = -beta * (*sig_data)(idx, 4);
-        (*ret_data)(idx, 5) = -beta * (*sig_data)(idx, 5);
-#endif
+
+        (*ret_data)(idx) = alpha - beta * z;
     }
 } // setDataOnPatch
-
 } // namespace clot
