@@ -1,4 +1,5 @@
 #include <clot/BoundVelocityFunction.h>
+#include <clot/utility_functions.h>
 
 #include <ADS/app_namespaces.h>
 
@@ -12,6 +13,8 @@ BoundVelocityFunction::BoundVelocityFunction(const string& object_name, Pointer<
     d_c3 = input_db->getDouble("c3");
     d_thresh = input_db->getDoubleWithDefault("threshold", d_thresh);
     d_vol_pl = input_db->getDouble("vol_pl");
+    d_R0 = input_db->getDouble("r0");
+    d_S0 = input_db->getDouble("s0");
     return;
 } // UFunction
 
@@ -21,6 +24,7 @@ BoundVelocityFunction::~BoundVelocityFunction()
     d_ins_integrator = nullptr;
     d_sig_integrator = nullptr;
     d_phi_integrator = nullptr;
+    d_bond_integrator = nullptr;
 }
 
 void
@@ -120,6 +124,32 @@ BoundVelocityFunction::setDataOnPatchHierarchy(const int data_idx,
                          false,
                          d_ins_integrator->getIntermediateVelocityBoundaryConditions());
 
+    const int bond_scr_idx = var_db->mapVariableAndContextToIndex(d_bond_var, d_bond_integrator->getScratchContext());
+    const int bond_cur_idx = var_db->mapVariableAndContextToIndex(d_bond_var, d_bond_integrator->getCurrentContext());
+    const int bond_new_idx = var_db->mapVariableAndContextToIndex(d_bond_var, d_bond_integrator->getNewContext());
+    const bool bond_new_allocated = d_bond_integrator->isAllocatedPatchData(bond_new_idx, coarsest_ln, finest_ln);
+    const bool deallocate_bond_scr = !d_bond_integrator->isAllocatedPatchData(bond_scr_idx, coarsest_ln, finest_ln);
+    if (deallocate_bond_scr) d_bond_integrator->allocatePatchData(bond_scr_idx, data_time, coarsest_ln, finest_ln);
+
+    if (bond_new_allocated)
+    {
+        // Use the average of phi_cur and phi_new
+        hier_cc_data_ops.linearSum(bond_scr_idx, 0.5, bond_cur_idx, 0.5, bond_new_idx);
+    }
+    else
+    {
+        hier_cc_data_ops.copyData(bond_scr_idx, bond_cur_idx);
+    }
+
+    // Now create the ITC
+    ghost_comps[0] = ITC(bond_scr_idx,
+                         "CONSERVATIVE_LINEAR_REFINE",
+                         false,
+                         "NONE",
+                         "LINEAR",
+                         false,
+                         d_bond_integrator->getPhysicalBcCoefs(d_bond_var));
+
     // Now that ghost cells are filled, fill data
     for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
     {
@@ -130,6 +160,7 @@ BoundVelocityFunction::setDataOnPatchHierarchy(const int data_idx,
     if (deallocate_phi_scr) d_phi_integrator->deallocatePatchData(phi_scr_idx, coarsest_ln, finest_ln);
     if (deallocate_sig_scr) d_sig_integrator->deallocatePatchData(sig_scr_idx, coarsest_ln, finest_ln);
     if (deallocate_uf_scr) d_ins_integrator->deallocatePatchData(uf_scr_idx, coarsest_ln, finest_ln);
+    if (deallocate_bond_scr) d_bond_integrator->deallocatePatchData(bond_scr_idx, coarsest_ln, finest_ln);
 }
 
 void
@@ -143,20 +174,25 @@ BoundVelocityFunction::setDataOnPatch(const int data_idx,
     Pointer<FaceData<NDIM, double>> ub_data = patch->getPatchData(data_idx);
     Pointer<FaceData<NDIM, double>> uf_data = patch->getPatchData(d_uf_var, d_ins_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_data = patch->getPatchData(d_phi_var, d_phi_integrator->getScratchContext());
-    Pointer<CellData<NDIM, double>> sig_data = patch->getPatchData(d_sig_var, d_sig_integrator->getScratchContext());
-
-#if !defined(NDEBUG)
-    TBOX_ASSERT(ub_data);
-    TBOX_ASSERT(uf_data);
-    TBOX_ASSERT(phi_data);
-    TBOX_ASSERT(sig_data);
-#endif
+    Pointer<CellData<NDIM, double>> sig0_data = patch->getPatchData(d_sig_var, d_sig_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(d_bond_var, d_bond_integrator->getScratchContext());
 
     if (initial_time)
     {
         ub_data->fillAll(0.0);
         return;
     }
+
+#if !defined(NDEBUG)
+    TBOX_ASSERT(ub_data);
+    TBOX_ASSERT(uf_data);
+    TBOX_ASSERT(phi_data);
+    TBOX_ASSERT(sig0_data);
+    TBOX_ASSERT(bond_data);
+#endif
+
+    // Convert to the correct form of stress
+    Pointer<CellData<NDIM, double>> sig_data = convertToStress(*sig0_data, *bond_data, patch, d_S0, d_R0);
 
     const Box<NDIM>& box = patch->getBox();
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
@@ -181,24 +217,24 @@ BoundVelocityFunction::setDataOnPatch(const int data_idx,
             else
             {
                 // Now compute the divergence of the stress
-                double grad_sig = 0.0;
+                double div_sig = 0.0;
                 if (axis == 0)
                 {
-                    grad_sig = ((*sig_data)(idx.toCell(1)) - (*sig_data)(idx.toCell(0))) / dx[0];
+                    div_sig = ((*sig_data)(idx.toCell(1)) - (*sig_data)(idx.toCell(0))) / dx[0];
                     IntVector<NDIM> up(0);
                     up(1) = 1;
                     double sig_up = 0.5 * ((*sig_data)((idx + up).toCell(1)) + (*sig_data)((idx + up).toCell(0)));
                     double sig_low = 0.5 * ((*sig_data)((idx - up).toCell(1)) + (*sig_data)((idx - up).toCell(0)));
-                    grad_sig += (sig_up - sig_low) / (2.0 * dx[1]);
+                    div_sig += (sig_up - sig_low) / (2.0 * dx[1]);
                 }
                 else if (axis == 1)
                 {
-                    grad_sig = ((*sig_data)(idx.toCell(1)) - (*sig_data)(idx.toCell(0))) / dx[1];
+                    div_sig = ((*sig_data)(idx.toCell(1)) - (*sig_data)(idx.toCell(0))) / dx[1];
                     IntVector<NDIM> up(0);
                     up(0) = 1;
                     double sig_up = 0.5 * ((*sig_data)((idx + up).toCell(1)) + (*sig_data)((idx + up).toCell(0)));
                     double sig_low = 0.5 * ((*sig_data)((idx - up).toCell(1)) + (*sig_data)((idx - up).toCell(0)));
-                    grad_sig += (sig_up - sig_low) / (2.0 * dx[0]);
+                    div_sig += (sig_up - sig_low) / (2.0 * dx[0]);
                 }
                 else if (axis == 2)
                 {
@@ -210,7 +246,7 @@ BoundVelocityFunction::setDataOnPatch(const int data_idx,
                 }
 
                 // Now compute the bound velocity field. Note we've handled the case of xi small above.
-                (*ub_data)(idx) = (*uf_data)(idx) + grad_sig / xi;
+                (*ub_data)(idx) = (*uf_data)(idx) + div_sig / xi;
             }
         }
     }

@@ -12,6 +12,7 @@
 #include <CellIndex.h>
 
 #include <functional>
+#include <vector>
 
 namespace clot
 {
@@ -41,6 +42,40 @@ double convolution_mask(double alpha,
                         const double* const dx,
                         const IBTK::VectorNd& x,
                         const std::array<IBTK::VectorNd, 2>& xbds);
+
+/*!
+ * Functions to convert the stress to the correct stress in the presence of non-divergence free velocity fields.
+ */
+//\{
+/*!
+ * \brief Template type Array must have a valid copy constructor and a member function data() that returns a pointer to
+ * the contiguous underlying data.
+ */
+template <typename Array>
+Array convertToStress(const Array& si, double bond, double S0, double R0);
+IBTK::MatrixNd convertToStressMatrix(const IBTK::MatrixNd& si, double bond, double S0, double R0);
+/*!
+ * \brief Modifies the pointer provided to update the stress components.
+ */
+void convertToStressPtr(double* const si, double bond, double S0, double R0);
+/*!
+ * \brief Returns the factor that modifies the stress tensor.
+ */
+double modifiedStressFactor(double tr, double bond, double S0, double R0);
+/*!
+ * \brief Convert the cell data of the stress tensor on a given patch. An optional flag determines whether to convert
+ * ghost cell data too.
+ *
+ * \note Conversion in the ghost cell region requires both sigma and bond ghost cells be given.
+ */
+SAMRAI::tbox::Pointer<SAMRAI::pdat::CellData<NDIM, double>>
+convertToStress(const SAMRAI::pdat::CellData<NDIM, double>& sig_data,
+                const SAMRAI::pdat::CellData<NDIM, double>& bond_data,
+                SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
+                double S0,
+                double R0,
+                bool fill_ghosts = false);
+//\}
 
 template <typename T>
 inline T

@@ -61,4 +61,35 @@ convolution_mask(double alpha,
     else
         return convolve;
 }
+
+#if (NDIM == 2)
+static int num_stress_comps = 3;
+#else
+static int num_stress_comps = 6;
+#endif
+
+Pointer<CellData<NDIM, double>>
+convertToStress(const CellData<NDIM, double>& sig_data,
+                const CellData<NDIM, double>& bond_data,
+                Pointer<Patch<NDIM>> patch,
+                const double S0,
+                const double R0,
+                bool fill_ghosts)
+{
+    IntVector<NDIM> gcw =
+        fill_ghosts ? std::min(sig_data.getGhostCellWidth().max(), bond_data.getGhostCellWidth().max()) : 0;
+    Pointer<CellData<NDIM, double>> ret_data = new CellData<NDIM, double>(patch->getBox(), sig_data.getDepth(), gcw);
+
+    for (CellIterator<NDIM> ci(ret_data->getGhostBox()); ci; ci++)
+    {
+        const CellIndex<NDIM>& idx = ci();
+        double tr = 0.0;
+        for (int d = 0; d < NDIM; ++d) tr += sig_data(idx, d);
+        tr = modifiedStressFactor(tr, bond_data(idx), S0, R0);
+        for (int d = 0; d < NDIM; ++d) (*ret_data)(idx, d) = sig_data(idx, d) - tr;
+        for (int d = NDIM; d < num_stress_comps; ++d) (*ret_data)(idx, d) = sig_data(idx, d);
+    }
+    return ret_data;
+}
+
 } // namespace clot

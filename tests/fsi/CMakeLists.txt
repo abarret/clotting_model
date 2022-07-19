@@ -9,6 +9,4 @@ ADD_TEST(
       tests
    SOURCES
       main.cpp
-   INPUT_FILES
-      input2d
    )

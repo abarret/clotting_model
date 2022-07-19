@@ -170,9 +170,6 @@ private:
 
     // Beta function pointer
     std::function<double(double)> d_beta_fcn;
-
-    // wall index
-    int d_w_idx = IBTK::invalid_index;
 };
 } // namespace clot
 

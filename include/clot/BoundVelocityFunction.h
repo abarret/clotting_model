@@ -94,20 +94,31 @@ public:
         return;
     }
 
+    /*!
+     * Set the bond data.
+     */
+    inline void setBondData(SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> bond_var,
+                            SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> integrator)
+    {
+        d_bond_var = bond_var;
+        d_bond_integrator = integrator;
+        return;
+    }
+
 private:
     BoundVelocityFunction() = delete;
     BoundVelocityFunction(const BoundVelocityFunction& from) = delete;
     BoundVelocityFunction& operator=(const BoundVelocityFunction& that) = delete;
 
-    SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_sig_var, d_phi_var;
+    SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_sig_var, d_phi_var, d_bond_var;
     SAMRAI::tbox::Pointer<SAMRAI::pdat::FaceVariable<NDIM, double>> d_uf_var;
 
-    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_sig_integrator, d_phi_integrator;
+    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_sig_integrator, d_phi_integrator, d_bond_integrator;
     SAMRAI::tbox::Pointer<IBAMR::INSHierarchyIntegrator> d_ins_integrator;
 
     double d_thresh = 1.0e-8;
-    double d_vol_pl = std::numeric_limits<double>::quiet_NaN();
-    double d_c3 = std::numeric_limits<double>::quiet_NaN();
+    double d_vol_pl = std::numeric_limits<double>::quiet_NaN(), d_c3 = std::numeric_limits<double>::quiet_NaN(),
+           d_S0 = std::numeric_limits<double>::quiet_NaN(), d_R0 = std::numeric_limits<double>::quiet_NaN();
 };
 
 } // namespace clot

@@ -66,7 +66,7 @@ CohesionStressBoundRHS::setDataOnPatchHierarchy(const int data_idx,
         Pointer<Variable<NDIM>> var = var_integrator_pair.first;
         Pointer<HierarchyIntegrator> integrator = var_integrator_pair.second;
         // Check that things have been set correctly
-        TBOX_ASSERT(var != nullptr && integrator != nullptr);
+        TBOX_ASSERT(var && integrator);
         // Allocate scratch data when needed.
         auto var_db = VariableDatabase<NDIM>::getDatabase();
         int var_scr_idx = var_db->mapVariableAndContextToIndex(var, integrator->getScratchContext());

@@ -61,8 +61,7 @@ BondUnactivatedSource::setDataOnPatchHierarchy(const int data_idx,
 {
     // This implementation atm is identical to ActivatePlatelet Source
     // Loop over variables.
-    std::array<std::pair<Pointer<Variable<NDIM>>, Pointer<AdvDiffHierarchyIntegrator>>, 4> var_hier_pairs = {
-        std::make_pair(d_phi_u_var, d_sb_adv_diff_integrator),
+    std::array<std::pair<Pointer<Variable<NDIM>>, Pointer<AdvDiffHierarchyIntegrator>>, 3> var_hier_pairs = {
         std::make_pair(d_z_var, d_sb_adv_diff_integrator),
         std::make_pair(d_phi_a_var, d_sb_adv_diff_integrator),
         std::make_pair(d_sig_var, d_adv_diff_integrator)
@@ -158,8 +157,6 @@ BondUnactivatedSource::setDataOnPatch(const int data_idx,
     // grab cell data for variables
     Pointer<CellData<NDIM, double>> phi_a_data =
         patch->getPatchData(d_phi_a_var, d_sb_adv_diff_integrator->getScratchContext());
-    Pointer<CellData<NDIM, double>> phi_u_data =
-        patch->getPatchData(d_phi_u_var, d_sb_adv_diff_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> z_data =
         patch->getPatchData(d_z_var, d_sb_adv_diff_integrator->getScratchContext());
     // stress tensor and wall sites
@@ -179,7 +176,6 @@ BondUnactivatedSource::setDataOnPatch(const int data_idx,
         VectorNd x;
         for (int d = 0; d < NDIM; ++d) x[d] = xlow[d] + dx[d] * (static_cast<double>(idx(d) - idx_low(d)) + 0.5);
         // grab the var values w/ the index
-        double phi_u = (*phi_u_data)(idx);
         double phi_a = (*phi_a_data)(idx);
         double w = (*w_data)(idx);
         double z = (*z_data)(idx);
