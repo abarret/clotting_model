@@ -44,5 +44,40 @@ bspline4(double x)
         return 0.0;
 }
 
+template <typename Array>
+inline Array
+convertToStress(const Array& si, const double bond, const double S0, const double R0)
+{
+    Array ret = si;
+    return convertToStressPtr(ret.data(), bond, S0, R0);
+}
+
+inline void
+convertToStressPtr(double* const si, const double bond, const double S0, const double R0)
+{
+    if (bond < 1.0e-8) return;
+    double tr = 0.0;
+    for (int d = 0; d < NDIM; ++d) tr += si[d];
+    tr = modifiedStressFactor(tr, bond, S0, R0);
+    for (int d = 0; d < NDIM; ++d) si[d] -= tr;
+}
+
+inline IBTK::MatrixNd
+convertToStressMatrix(const IBTK::MatrixNd& si, const double bond, const double S0, const double R0)
+{
+    IBTK::MatrixNd ret = si;
+    if (bond < 1.0e-8) return ret;
+    double tr = modifiedStressFactor(si.trace(), bond, S0, R0);
+    ret = si - tr * IBTK::MatrixNd::Ones();
+    return ret;
+}
+
+inline double
+modifiedStressFactor(double tr, const double bond, const double S0, const double R0)
+{
+    if (bond < 1.0e-8) return tr;
+    tr = -bond * S0 * R0 * std::sqrt(2.0 * tr / (S0 * bond + 1.0e-8));
+    return tr;
+}
 } // namespace clot
 #endif
