@@ -16,7 +16,7 @@ NX = RATIO*NY                                 // number of grid cells on coarses
 // Note that we use the same grid spacing in both directions
 NFINEST = (REF_RATIO^(MAX_LEVELS - 1))*NX  // effective number of grid cells on finest grid level in the X direction
 DX = LX / NFINEST
-VIZ_DUMP_TIME_INTERVAL = 0.2
+VIZ_DUMP_TIME_INTERVAL = 0.1
 
 // Complex Fluid parameters
 FLUID_MODEL = "USER_DEFINED"
@@ -44,28 +44,6 @@ DIF_INT_METHOD = "TRAPEZOIDAL_RULE"
 USE_RBFS = TRUE
 RBF_STENCIL_SIZE = 5
 RBF_POLY_ORDER = "LINEAR"
-
-// Model parameters
-UNACTIVATED_DIFFUSION_COEF = 1.0e-7
-ACTIVATED_DIFFUSION_COEF = 0.0
-C4 = 4.0
-A0 = 1.0
-A0W = 1.0
-BETA_0 = 0.01
-BETA_1 = 0.01
-R_0 = 1.0
-KUA = 2.0
-KUW = 2.0
-WMAX = 1.0
-PL_U_IN = 1.0
-
-// Extra parameters to make sure things don't go too far
-CLOT_BREAK_X = 2.25
-BETA_LIMIT = 300.0
-BDRY_0_X = -3.0
-BDRY_0_Y = 0.0
-BDRY_1_X = 0.0
-BDRY_1_Y = 6.0
 
 // solver parameters
 NORMALIZE_VELOCITY = FALSE
@@ -123,43 +101,50 @@ Amplitude = 1.0
 Frequency = 4.0
 T_START = 25.0
 
+// Clot parameters
+WALL_SITES_INIT = 1.0
+THRESHOLD = 1.0e-8
+ACTIVATED_DIFFUSION_COEF = 1.0e-7
+BOUND_DIFFUSION_COEF = 0.0
+C3 = 1.0
+C4 = 4.0
+NB_MAX = 1.0
+NW_MAX = 1.0
+BETA_0 = 0.01
+BETA_1 = 0.01
+R_0 = 1.0
+KAB = 2.0
+KBB = 2.0
+KAW = 2.0
+R0 = 1.0
+S0 = 1.0
+PL_A_IN = 0.0
+VOL_PL = 0.01
+
 U = "(tanh((t - thalf)/tau) + tanh(thalf/tau)) / (1.0 + tanh(thalf/tau)) * -p_grad / (2.0 * mu) * (X_1 - 2.0) * (X_1 + 2.0)"
 
-UnactivatedPlatelets
+ClotParams
 {
-  Kua = KUA
-  Kuw = KUW
-  wmax = WMAX
-  bdry_0 = BDRY_0_X, BDRY_0_Y
-  bdry_1 = BDRY_1_X, BDRY_1_Y
-}
-
-ActivatedPlatelets
-{
-  Kua = KUA
-  Kuw = KUW
-  wmax = WMAX
-  bdry_0 = BDRY_0_X, BDRY_0_Y
-  bdry_1 = BDRY_1_X, BDRY_1_Y
-}
-
-BondVariable {
-  a0 = A0
-  a0w = A0W
-  wmax = WMAX
-  clot_break_x = CLOT_BREAK_X
-  beta_limit = BETA_LIMIT
-}
-
-CohesionRHS {
+  activated_diffusion_coef = ACTIVATED_DIFFUSION_COEF
+  bound_diffusion_coef = BOUND_DIFFUSION_COEF
+  wall_sites_init = WALL_SITES_INIT
+  kab = KAB
+  kbb = KBB
+  kaw = KAW
+  nb_max = NB_MAX
+  nw_max = NW_MAX
+  r0 = R0
+  s0 = S0
+  c3 = C3
+  threshold = THRESHOLD
+  vol_pl = VOL_PL
   c4 = C4
-  a0 = A0
-  a0w = A0W
-  wmax = WMAX
-  clot_break_x = CLOT_BREAK_X
-  beta_limit = BETA_LIMIT
 }
 
+CouplingManager {
+  stencil_width = RBF_STENCIL_SIZE
+}
+  
 BoundaryMesh {
   elem_order = ELEM_ORDER
   max_level = MAX_LEVELS
@@ -179,7 +164,7 @@ LSCutCellOperator {
 PoissonSolver {
 }
 
-ActivatedPlateletBcs
+BoundPlateletBcs
 {
   acoef_function_0 = "1.0"
   acoef_function_1 = "0.0"
@@ -197,9 +182,9 @@ ActivatedPlateletBcs
   gcoef_function_3 = "0.0"
 }
 
-UnactivatedPlateletBcs
+ActivatedPlateletBcs
 {
-  pl_in = PL_U_IN
+  pl_in = PL_A_IN
   acoef_function_0 = "1.0"
   acoef_function_1 = "0.0"
   acoef_function_2 = "0.0"

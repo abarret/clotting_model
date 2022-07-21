@@ -14,16 +14,19 @@
 // Config files
 #include <ibamr/config.h>
 
-#include <clot/BondUnactivatedSource.h>
+#include <clot/BondBoundSource.h>
+#include <clot/BoundExtraStressForcing.h>
+#include <clot/BoundPlateletSource.h>
+#include <clot/BoundVelocityFunction.h>
 #include <clot/BoundaryMeshMapping.h>
-#include <clot/CohesionStressUnactivatedRHS.h>
-#include <clot/UnactivatedPlateletSource.h>
+#include <clot/CohesionStressBoundRHS.h>
 #include <clot/app_namespaces.h>
 
 #include <ADS/CutCellVolumeMeshMapping.h>
 #include <ADS/LSCutCellLaplaceOperator.h>
 #include <ADS/LSFromMesh.h>
 #include <ADS/SBAdvDiffIntegrator.h>
+#include <ADS/SBIntegrator.h>
 
 #include <ibamr/AdvDiffSemiImplicitHierarchyIntegrator.h>
 #include <ibamr/CFINSForcing.h>
@@ -119,7 +122,7 @@ struct ClampVars
     Pointer<VariableContext> context;
     // Variables to clamp go here
     // if more are needed, make this an array
-    Pointer<hier::Variable<NDIM>> phi_u_var;
+    Pointer<hier::Variable<NDIM>> phi_b_var;
     Pointer<hier::Variable<NDIM>> phi_a_var;
     Pointer<hier::Variable<NDIM>> bond_var;
 };
@@ -175,6 +178,37 @@ tether_force_function(VectorValue<double>& F,
 
 } // namespace ModelData
 using namespace ModelData;
+
+struct WallParams
+{
+    WallParams(Pointer<Database> input_db)
+    {
+        Kaw = input_db->getDouble("kaw");
+        nw_max = input_db->getDouble("nw_max");
+        nb_max = input_db->getDouble("nb_max");
+    }
+    double Kaw;
+    double nw_max;
+    double nb_max;
+};
+
+double
+wall_sites_ode(const double w,
+               const std::vector<double>& fl_vals,
+               const std::vector<double>& /*sf_vals*/,
+               double /*time*/,
+               void* ctx)
+{
+    auto params = static_cast<WallParams*>(ctx);
+    return -params->Kaw * params->nw_max * w * params->nb_max * fl_vals[0];
+}
+
+static double init_wall_sites = std::numeric_limits<double>::quiet_NaN();
+double
+wall_sites_init(const VectorNd& /*X*/, const Node* const /*node*/)
+{
+    return init_wall_sites;
+}
 
 static std::ofstream force_stream, tether_stream;
 void output_net_force(EquationSystems* eq_sys, const double loop_time);
@@ -411,47 +445,79 @@ main(int argc, char* argv[])
         t_start = input_db->getDouble("T_START");
 
         // Create advected quantities
-        Pointer<CellVariable<NDIM, double>> phi_u_var = new CellVariable<NDIM, double>("phi_u");
+        Pointer<CellVariable<NDIM, double>> phi_b_var = new CellVariable<NDIM, double>("phi_b");
         Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
         Pointer<CellVariable<NDIM, double>> bond_var = new CellVariable<NDIM, double>("bond");
+
+        // Pull out the database everything uses
+        Pointer<Database> clot_params = app_initializer->getComponentDatabase("ClotParams");
+
+        // Create velocity function
+        Pointer<BoundVelocityFunction> bound_vel_fcn = new BoundVelocityFunction("BoundVelocityFunction", clot_params);
 
         // Set up Cohesion stress tensor
         Pointer<CFINSForcing> cohesionStressForcing =
             new CFINSForcing("CohesionStressForcing",
                              app_initializer->getComponentDatabase("CohesionStress"),
-                             ins_integrator,
+                             static_cast<Pointer<CartGridFunction>>(bound_vel_fcn),
                              grid_geometry,
                              adv_diff_integrator,
                              visit_data_writer);
         ins_integrator->registerBodyForceFunction(cohesionStressForcing);
-        Pointer<CohesionStressUnactivatedRHS> cohesion_relax =
-            new CohesionStressUnactivatedRHS(phi_u_var,
-                                             phi_a_var,
-                                             bond_var,
-                                             "CohesionRHS",
-                                             app_initializer->getComponentDatabase("CohesionRHS"),
-                                             sb_adv_diff_integrator);
+        Pointer<CohesionStressBoundRHS> cohesion_relax = new CohesionStressBoundRHS("CohesionRHS", clot_params);
+        cohesion_relax->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
+        cohesion_relax->setActivatedPlateletData(phi_a_var, sb_adv_diff_integrator);
+        cohesion_relax->setBondData(bond_var, sb_adv_diff_integrator);
+        cohesion_relax->setKernel(BSPLINE_3);
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
+        Pointer<CellVariable<NDIM, double>> sig_var = cohesionStressForcing->getVariable();
 
+        // Additional forcing for nondivergence-free velocity
+        Pointer<BoundExtraStressForcing> extra_forcing =
+            new BoundExtraStressForcing("BoundExtraStressForcing", clot_params);
+        extra_forcing->setBondData(bond_var, sb_adv_diff_integrator);
+        extra_forcing->setStressData(sig_var, adv_diff_integrator);
+        ins_integrator->registerBodyForceFunction(extra_forcing);
+
+        // Set up bound velocity function and register it with the sb integrator
+        bound_vel_fcn->setBondData(bond_var, sb_adv_diff_integrator);
+        bound_vel_fcn->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
+        bound_vel_fcn->setVelocityData(ins_integrator->getVelocityVariable(), ins_integrator);
+        bound_vel_fcn->setSigmaData(sig_var, adv_diff_integrator);
+        Pointer<FaceVariable<NDIM, double>> ub_vel_var = new FaceVariable<NDIM, double>("bound_velocity");
+        sb_adv_diff_integrator->registerAdvectionVelocity(ub_vel_var);
+        sb_adv_diff_integrator->setAdvectionVelocityFunction(ub_vel_var, bound_vel_fcn);
+
+        // Create beta function
         double beta_0 = input_db->getDouble("BETA_0");
         double beta_1 = input_db->getDouble("BETA_1");
         double r_0 = input_db->getDouble("R_0");
         BetaFcn betaFcn(r_0, beta_0, beta_1);
         cohesion_relax->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
-        Pointer<CellVariable<NDIM, double>> sig_var = cohesionStressForcing->getVariable();
 
-        Pointer<LSCutCellLaplaceOperator> phi_u_rhs_oper = new LSCutCellLaplaceOperator(
-                                              "PhiULSCutCellRHSOperator",
-                                              app_initializer->getComponentDatabase("LSCutCellOperator"),
-                                              false),
-                                          phi_u_oper = new LSCutCellLaplaceOperator(
-                                              "PhiULSCutCellOperator",
-                                              app_initializer->getComponentDatabase("LSCutCellOperator"),
-                                              false);
-        Pointer<PETScKrylovPoissonSolver> phi_u_solver = new PETScKrylovPoissonSolver(
-            "PhiUPoissonSolver", app_initializer->getComponentDatabase("PoissonSolver"), "poisson_solve_");
-        phi_u_solver->setOperator(phi_u_oper);
-
+        // Activated platelets
+        sb_adv_diff_integrator->registerTransportedQuantity(phi_a_var);
+        sb_adv_diff_integrator->restrictToLevelSet(phi_a_var, ls_var);
+        Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_u_src");
+        sb_adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
+        sb_adv_diff_integrator->setDiffusionCoefficient(phi_a_var, clot_params->getDouble("activated_diffusion_coef"));
+        Pointer<BoundPlateletSource> phi_a_src_fcn = new BoundPlateletSource("UnactivatedPlatelets", clot_params);
+        phi_a_src_fcn->setSign(true);
+        phi_a_src_fcn->setKernel(BSPLINE_3);
+        phi_a_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
+        phi_a_src_fcn->setActivatedPlateletData(phi_a_var, sb_adv_diff_integrator);
+        phi_a_src_fcn->setBondsData(bond_var, sb_adv_diff_integrator);
+        phi_a_src_fcn->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
+        phi_a_src_fcn->setStressData(sig_var, adv_diff_integrator);
+        sb_adv_diff_integrator->registerSourceTerm(phi_a_src_var);
+        sb_adv_diff_integrator->setSourceTermFunction(phi_a_src_var, phi_a_src_fcn);
+        sb_adv_diff_integrator->setSourceTerm(phi_a_var, phi_a_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> phi_a_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            phi_a_bcs = new muParserRobinBcCoefs("UnactivatedPlateletsBcs",
+                                                 app_initializer->getComponentDatabase("ActivatedPlateletBcs"),
+                                                 grid_geometry);
+        sb_adv_diff_integrator->setPhysicalBcCoef(phi_a_var, phi_a_bcs.getPointer());
         Pointer<LSCutCellLaplaceOperator> phi_a_rhs_oper = new LSCutCellLaplaceOperator(
                                               "PhiALSCutCellRHSOperator",
                                               app_initializer->getComponentDatabase("LSCutCellOperator"),
@@ -463,7 +529,66 @@ main(int argc, char* argv[])
         Pointer<PETScKrylovPoissonSolver> phi_a_solver = new PETScKrylovPoissonSolver(
             "PhiAPoissonSolver", app_initializer->getComponentDatabase("PoissonSolver"), "poisson_solve_");
         phi_a_solver->setOperator(phi_a_oper);
+        sb_adv_diff_integrator->setHelmholtzSolver(phi_a_var, phi_a_solver);
+        sb_adv_diff_integrator->setHelmholtzRHSOperator(phi_a_var, phi_a_rhs_oper);
 
+        // Bound platelets
+        sb_adv_diff_integrator->registerTransportedQuantity(phi_b_var);
+        sb_adv_diff_integrator->restrictToLevelSet(phi_b_var, ls_var);
+        Pointer<CellVariable<NDIM, double>> phi_b_src_var = new CellVariable<NDIM, double>("phi_b_src");
+        sb_adv_diff_integrator->setAdvectionVelocity(phi_b_var, ub_vel_var);
+        sb_adv_diff_integrator->setDiffusionCoefficient(phi_b_var, clot_params->getDouble("bound_diffusion_coef"));
+        Pointer<BoundPlateletSource> phi_b_src_fcn = new BoundPlateletSource("BoundPlatelets", clot_params);
+        phi_b_src_fcn->setSign(false);
+        phi_b_src_fcn->setKernel(BSPLINE_3);
+        phi_b_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
+        phi_b_src_fcn->setActivatedPlateletData(phi_b_var, sb_adv_diff_integrator);
+        phi_b_src_fcn->setBondsData(bond_var, sb_adv_diff_integrator);
+        phi_b_src_fcn->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
+        phi_b_src_fcn->setStressData(sig_var, adv_diff_integrator);
+        sb_adv_diff_integrator->registerSourceTerm(phi_b_src_var);
+        sb_adv_diff_integrator->setSourceTermFunction(phi_b_src_var, phi_b_src_fcn);
+        sb_adv_diff_integrator->setSourceTerm(phi_b_var, phi_b_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> phi_b_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            phi_b_bcs = new muParserRobinBcCoefs(
+                "ActivatedPlateletsBcs", app_initializer->getComponentDatabase("BoundPlateletBcs"), grid_geometry);
+        sb_adv_diff_integrator->setPhysicalBcCoef(phi_b_var, phi_b_bcs.getPointer());
+        Pointer<LSCutCellLaplaceOperator> phi_b_rhs_oper = new LSCutCellLaplaceOperator(
+                                              "PhiBLSCutCellRHSOperator",
+                                              app_initializer->getComponentDatabase("LSCutCellOperator"),
+                                              false),
+                                          phi_b_oper = new LSCutCellLaplaceOperator(
+                                              "PhiBLSCutCellOperator",
+                                              app_initializer->getComponentDatabase("LSCutCellOperator"),
+                                              false);
+        Pointer<PETScKrylovPoissonSolver> phi_b_solver = new PETScKrylovPoissonSolver(
+            "PhiAPoissonSolver", app_initializer->getComponentDatabase("PoissonSolver"), "poisson_solve_");
+        phi_b_solver->setOperator(phi_b_oper);
+        sb_adv_diff_integrator->setHelmholtzSolver(phi_b_var, phi_b_solver);
+        sb_adv_diff_integrator->setHelmholtzRHSOperator(phi_b_var, phi_b_rhs_oper);
+
+        // Bonds
+        sb_adv_diff_integrator->registerTransportedQuantity(bond_var);
+        sb_adv_diff_integrator->restrictToLevelSet(bond_var, ls_var);
+        Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
+        sb_adv_diff_integrator->setAdvectionVelocity(bond_var, ub_vel_var);
+        sb_adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
+        Pointer<BondBoundSource> bond_src_fcn = new BondBoundSource("BondSource", clot_params);
+        bond_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
+        bond_src_fcn->setActivatedPlateletData(phi_a_var, sb_adv_diff_integrator);
+        bond_src_fcn->setBondData(bond_var, sb_adv_diff_integrator);
+        bond_src_fcn->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
+        bond_src_fcn->setStressData(sig_var, adv_diff_integrator);
+        bond_src_fcn->setKernel(BSPLINE_3);
+        sb_adv_diff_integrator->registerSourceTerm(bond_src_var);
+        sb_adv_diff_integrator->setSourceTermFunction(bond_src_var, bond_src_fcn);
+        sb_adv_diff_integrator->setSourceTerm(bond_var, bond_src_var);
+        Pointer<RobinBcCoefStrategy<NDIM>> bond_bcs;
+        if (grid_geometry->getPeriodicShift().min() == 0)
+            bond_bcs = new muParserRobinBcCoefs(
+                "BondVariableBcs", app_initializer->getComponentDatabase("BondVariableBcs"), grid_geometry);
+        sb_adv_diff_integrator->setPhysicalBcCoef(bond_var, bond_bcs.getPointer());
         Pointer<LSCutCellLaplaceOperator> bond_rhs_oper = new LSCutCellLaplaceOperator(
                                               "BondLSCutCellRHSOperator",
                                               app_initializer->getComponentDatabase("LSCutCellOperator"),
@@ -475,95 +600,38 @@ main(int argc, char* argv[])
         Pointer<PETScKrylovPoissonSolver> bond_solver = new PETScKrylovPoissonSolver(
             "BondPoissonSolver", app_initializer->getComponentDatabase("PoissonSolver"), "poisson_solve_");
         bond_solver->setOperator(bond_oper);
-        // Set up platelet concentrations and bond information
-
-        // Unactivated
-        sb_adv_diff_integrator->registerTransportedQuantity(phi_u_var);
-        sb_adv_diff_integrator->restrictToLevelSet(phi_u_var, ls_var);
-        Pointer<CellVariable<NDIM, double>> phi_u_src_var = new CellVariable<NDIM, double>("phi_u_src");
-        sb_adv_diff_integrator->setAdvectionVelocity(phi_u_var, ins_integrator->getAdvectionVelocityVariable());
-        sb_adv_diff_integrator->setDiffusionCoefficient(phi_u_var, input_db->getDouble("UNACTIVATED_DIFFUSION_COEF"));
-        Pointer<UnactivatedPlateletSource> phi_u_src_fcn =
-            new UnactivatedPlateletSource("UnactivatedPlatelets",
-                                          phi_u_var,
-                                          phi_a_var,
-                                          app_initializer->getComponentDatabase("ActivatedPlatelets"),
-                                          sb_adv_diff_integrator);
-        phi_u_src_fcn->setSign(false);
-        phi_u_src_fcn->setKernel(BSPLINE_3);
-        sb_adv_diff_integrator->registerSourceTerm(phi_u_src_var);
-        sb_adv_diff_integrator->setSourceTermFunction(phi_u_src_var, phi_u_src_fcn);
-        sb_adv_diff_integrator->setSourceTerm(phi_u_var, phi_u_src_var);
-        Pointer<RobinBcCoefStrategy<NDIM>> phi_u_bcs;
-        if (grid_geometry->getPeriodicShift().min() == 0)
-            phi_u_bcs = new muParserRobinBcCoefs("UnactivatedPlateletsBcs",
-                                                 app_initializer->getComponentDatabase("UnactivatedPlateletBcs"),
-                                                 grid_geometry);
-        sb_adv_diff_integrator->setPhysicalBcCoef(phi_u_var, phi_u_bcs.getPointer());
-        sb_adv_diff_integrator->setHelmholtzSolver(phi_u_var, phi_u_solver);
-        sb_adv_diff_integrator->setHelmholtzRHSOperator(phi_u_var, phi_u_rhs_oper);
-
-        // Activated
-        sb_adv_diff_integrator->registerTransportedQuantity(phi_a_var);
-        sb_adv_diff_integrator->restrictToLevelSet(phi_a_var, ls_var);
-        Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
-        sb_adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
-        sb_adv_diff_integrator->setDiffusionCoefficient(phi_a_var, input_db->getDouble("ACTIVATED_DIFFUSION_COEF"));
-        Pointer<UnactivatedPlateletSource> phi_a_src_fcn =
-            new UnactivatedPlateletSource("ActivatedPlatelets",
-                                          phi_u_var,
-                                          phi_a_var,
-                                          app_initializer->getComponentDatabase("ActivatedPlatelets"),
-                                          sb_adv_diff_integrator);
-        phi_a_src_fcn->setSign(true);
-        phi_a_src_fcn->setKernel(BSPLINE_3);
-        sb_adv_diff_integrator->registerSourceTerm(phi_a_src_var);
-        sb_adv_diff_integrator->setSourceTermFunction(phi_a_src_var, phi_a_src_fcn);
-        sb_adv_diff_integrator->setSourceTerm(phi_a_var, phi_a_src_var);
-        Pointer<RobinBcCoefStrategy<NDIM>> phi_a_bcs;
-        if (grid_geometry->getPeriodicShift().min() == 0)
-            phi_a_bcs = new muParserRobinBcCoefs(
-                "ActivatedPlateletsBcs", app_initializer->getComponentDatabase("ActivatedPlateletBcs"), grid_geometry);
-        sb_adv_diff_integrator->setPhysicalBcCoef(phi_a_var, phi_a_bcs.getPointer());
-        sb_adv_diff_integrator->setHelmholtzSolver(phi_a_var, phi_a_solver);
-        sb_adv_diff_integrator->setHelmholtzRHSOperator(phi_a_var, phi_a_rhs_oper);
-
-        // Bonds
-        sb_adv_diff_integrator->registerTransportedQuantity(bond_var);
-        sb_adv_diff_integrator->restrictToLevelSet(bond_var, ls_var);
-        Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
-        sb_adv_diff_integrator->setAdvectionVelocity(bond_var, ins_integrator->getAdvectionVelocityVariable());
-        sb_adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
-        Pointer<BondUnactivatedSource> bond_src_fcn =
-            new BondUnactivatedSource(phi_u_var,
-                                      phi_a_var,
-                                      bond_var,
-                                      sig_var,
-                                      app_initializer->getComponentDatabase("BondVariable"),
-                                      adv_diff_integrator,
-                                      sb_adv_diff_integrator);
-        bond_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
-        sb_adv_diff_integrator->registerSourceTerm(bond_src_var);
-        sb_adv_diff_integrator->setSourceTermFunction(bond_src_var, bond_src_fcn);
-        sb_adv_diff_integrator->setSourceTerm(bond_var, bond_src_var);
-        Pointer<RobinBcCoefStrategy<NDIM>> bond_bcs;
-        if (grid_geometry->getPeriodicShift().min() == 0)
-            bond_bcs = new muParserRobinBcCoefs(
-                "BondVariableBcs", app_initializer->getComponentDatabase("BondVariableBcs"), grid_geometry);
-        sb_adv_diff_integrator->setPhysicalBcCoef(bond_var, bond_bcs.getPointer());
         sb_adv_diff_integrator->setHelmholtzSolver(bond_var, bond_solver);
         sb_adv_diff_integrator->setHelmholtzRHSOperator(bond_var, bond_rhs_oper);
 
         // Wall sites
+        const std::string wall_sites_name = "WallSites";
+        WallParams wall_params(clot_params);
         FEDataManager* fe_data_manager = ib_method_ops->getFEDataManager();
         auto wall_mesh_mapping =
             std::make_shared<WallSitesMeshMapping>("WallSitesMesh",
                                                    app_initializer->getComponentDatabase("BoundaryMesh"),
+                                                   wall_sites_name,
                                                    &mesh,
                                                    fe_data_manager,
                                                    restart_read_dirname,
                                                    restart_restore_num);
         wall_mesh_mapping->initializeEquationSystems();
+        auto sb_coupling_manager =
+            std::make_shared<SBSurfaceFluidCouplingManager>("CouplingManager",
+                                                            app_initializer->getComponentDatabase("CouplingManager"),
+                                                            wall_mesh_mapping->getMeshPartitioner());
+        sb_coupling_manager->registerFluidConcentration(phi_a_var);
+        sb_coupling_manager->registerSurfaceConcentration(wall_sites_name);
+        sb_coupling_manager->registerSurfaceReactionFunction(
+            wall_sites_name, wall_sites_ode, static_cast<void*>(&wall_params));
+        sb_coupling_manager->registerFluidConcentration(phi_a_var);
+        sb_coupling_manager->registerFluidSurfaceDependence(wall_sites_name, phi_a_var);
+        init_wall_sites = clot_params->getDouble("wall_sites_init");
+        sb_coupling_manager->registerInitialConditions(wall_sites_name, wall_sites_init);
+        sb_coupling_manager->initializeFEData();
+        Pointer<SBIntegrator> sb_integrator = new SBIntegrator("SBIntegrator", sb_coupling_manager);
+        sb_adv_diff_integrator->registerSBIntegrator(sb_integrator, ls_var);
+        sb_adv_diff_integrator->registerLevelSetSBDataManager(ls_var, sb_coupling_manager);
         auto bdry_mesh_mapping =
             std::make_shared<BoundaryMeshMapping>("BoundaryMesh",
                                                   app_initializer->getComponentDatabase("BoundaryMesh"),
@@ -610,7 +678,7 @@ main(int argc, char* argv[])
         ClampVars clamp_vars = {
             patch_hierarchy,                         // patch hierarchy
             sb_adv_diff_integrator->getNewContext(), // variable context
-            phi_u_var,                               // unactivated platelets var
+            phi_b_var,                               // bound platelets var
             phi_a_var,                               // activated platelets var
             bond_var                                 // bonds var
         };
@@ -628,8 +696,8 @@ main(int argc, char* argv[])
                     {
                         Pointer<Patch<NDIM>> patch = level->getPatch(p());
                         // get patch data
-                        Pointer<CellData<NDIM, double>> phi_u_data =
-                            patch->getPatchData(clamp_vars->phi_u_var, clamp_vars->context);
+                        Pointer<CellData<NDIM, double>> phi_b_data =
+                            patch->getPatchData(clamp_vars->phi_b_var, clamp_vars->context);
                         Pointer<CellData<NDIM, double>> phi_a_data =
                             patch->getPatchData(clamp_vars->phi_a_var, clamp_vars->context);
                         Pointer<CellData<NDIM, double>> bond_data =
@@ -638,7 +706,7 @@ main(int argc, char* argv[])
                         for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
                         {
                             const CellIndex<NDIM>& idx = ci();
-                            (*phi_u_data)(idx) = std::max((*phi_u_data)(idx), 0.0);
+                            (*phi_b_data)(idx) = std::max((*phi_b_data)(idx), 0.0);
                             (*phi_a_data)(idx) = std::max((*phi_a_data)(idx), 0.0);
                             (*bond_data)(idx) = std::max((*bond_data)(idx), 0.0);
                         }
@@ -663,11 +731,11 @@ main(int argc, char* argv[])
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
         wall_mesh_mapping->getMeshPartitioner()->setPatchHierarchy(patch_hierarchy);
         wall_mesh_mapping->initializeFEData();
-        wall_mesh_mapping->setInitialConditions();
+        sb_coupling_manager->fillInitialConditions();
 
         // Make sure source terms are set correctly.
-        cohesion_relax->setOmegaIdx(w_idx);
-        phi_u_src_fcn->setWIdx(w_idx);
+        cohesion_relax->setWIdx(w_idx);
+        phi_b_src_fcn->setWIdx(w_idx);
         phi_a_src_fcn->setWIdx(w_idx);
         bond_src_fcn->setWIdx(w_idx);
 
@@ -725,6 +793,8 @@ main(int argc, char* argv[])
             pout << "Simulation time is " << loop_time << "\n";
 
             dt = time_integrator->getMaximumTimeStepSize();
+            // Set time points for velocity function
+            bound_vel_fcn->setTimePoints(loop_time, loop_time + dt);
             time_integrator->advanceHierarchy(dt);
             loop_time += dt;
 

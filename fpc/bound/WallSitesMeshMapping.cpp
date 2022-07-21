@@ -18,16 +18,18 @@ namespace clot
 {
 WallSitesMeshMapping::WallSitesMeshMapping(std::string object_name,
                                            Pointer<Database> input_db,
+                                           std::string W_sys_name,
                                            MeshBase* mesh,
                                            FEDataManager* data_manager,
                                            const std::string& restart_read_dirname,
                                            unsigned int restart_restore_num)
     : GeneralBoundaryMeshMapping(std::move(object_name), input_db, mesh, restart_read_dirname, restart_restore_num),
+      d_W_sys_name(std::move(W_sys_name)),
       d_base_data_manager(data_manager)
 {
     auto var_db = VariableDatabase<NDIM>::getDatabase();
-    d_w_var = new CellVariable<NDIM, double>("wall_sites");
-    d_w_idx = var_db->registerVariableAndContext(d_w_var, var_db->getContext("wall_sites"), 4);
+    d_w_var = new CellVariable<NDIM, double>(d_object_name + "::wall_sites");
+    d_w_idx = var_db->registerVariableAndContext(d_w_var, var_db->getContext(d_object_name + "::ctx"), 4);
 }
 
 WallSitesMeshMapping::~WallSitesMeshMapping()
@@ -42,47 +44,6 @@ WallSitesMeshMapping::~WallSitesMeshMapping()
 }
 
 void
-WallSitesMeshMapping::initializeEquationSystems()
-{
-    GeneralBoundaryMeshMapping::initializeEquationSystems();
-    bool from_restart = RestartManager::getManager()->isFromRestart();
-    if (!from_restart)
-    {
-        EquationSystems* eq_sys = d_bdry_mesh_partitioners[0]->getEquationSystems();
-        auto& W_sys = eq_sys->add_system<ExplicitSystem>(d_W_sys_name);
-        W_sys.add_variable("W");
-        W_sys.assemble_before_solve = false;
-        W_sys.assemble();
-    }
-}
-
-void
-WallSitesMeshMapping::setInitialConditions()
-{
-    plog << "Setting initial conditions\n";
-    // Boundary moves according to what's in the velocity systems
-    EquationSystems* eq_sys = d_bdry_mesh_partitioners[0]->getEquationSystems();
-    auto& W_sys = eq_sys->get_system(d_W_sys_name);
-    const DofMap& W_dof_map = W_sys.get_dof_map();
-    NumericVector<double>* W_vec = W_sys.solution.get();
-    // Loop over nodes
-    auto it = d_bdry_meshes[0]->local_nodes_begin();
-    const auto it_end = d_bdry_meshes[0]->local_nodes_end();
-    for (; it != it_end; ++it)
-    {
-        const Node* const node = *it;
-        std::vector<dof_id_type> W_dofs;
-        W_dof_map.dof_indices(node, W_dofs);
-        W_vec->set(W_dofs[0], 1.0);
-    }
-    W_vec->close();
-    W_sys.update();
-
-    // Spread wall sites
-    spreadWallSites(d_w_idx);
-}
-
-void
 WallSitesMeshMapping::initializeFEData()
 {
     const bool from_restart = RestartManager::getManager()->isFromRestart();
@@ -92,7 +53,6 @@ WallSitesMeshMapping::initializeFEData()
         d_bdry_eq_sys_vec[part]->init();
     }
     d_bdry_mesh_partitioners[0]->setPatchHierarchy(d_base_data_manager->getPatchHierarchy());
-    setInitialConditions();
     updateBoundaryLocation(0.0, false);
 }
 

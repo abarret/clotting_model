@@ -24,6 +24,7 @@ public:
      */
     WallSitesMeshMapping(std::string object_name,
                          SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db,
+                         std::string W_sys_name,
                          libMesh::MeshBase* vol_mesh,
                          IBTK::FEDataManager* fe_data_manager,
                          const std::string& restart_read_dirname = "",
@@ -49,14 +50,7 @@ public:
      */
     WallSitesMeshMapping& operator=(const WallSitesMeshMapping& that) = delete;
 
-    /*!
-     * \brief Set the initial number of wall sites.
-     */
-    void setInitialConditions();
-
     void initializeFEData() override;
-
-    void initializeEquationSystems() override;
 
     void buildBoundaryMesh() override;
 
@@ -78,7 +72,7 @@ public:
     }
 
 protected:
-    std::string d_W_sys_name = "W_SYSTEM";
+    std::string d_W_sys_name;
     IBTK::FEDataManager* d_base_data_manager;
 
     // We need a map between original mesh nodes and bdry mesh nodes
