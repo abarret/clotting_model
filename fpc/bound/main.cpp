@@ -487,6 +487,10 @@ main(int argc, char* argv[])
         Pointer<FaceVariable<NDIM, double>> ub_vel_var = new FaceVariable<NDIM, double>("bound_velocity");
         sb_adv_diff_integrator->registerAdvectionVelocity(ub_vel_var);
         sb_adv_diff_integrator->setAdvectionVelocityFunction(ub_vel_var, bound_vel_fcn);
+        // Drawing for velocity
+        Pointer<CellVariable<NDIM, double>> ub_draw_var = new CellVariable<NDIM, double>("UB", NDIM);
+        auto var_db = VariableDatabase<NDIM>::getDatabase();
+        const int ub_draw_idx = var_db->registerVariableAndContext(ub_draw_var, var_db->getContext("Draw"));
 
         // Create beta function
         double beta_0 = input_db->getDouble("BETA_0");
@@ -726,6 +730,9 @@ main(int argc, char* argv[])
         if (bdry_io) bdry_io->append(from_restart);
 
         // Initialize hierarchy configuration and data on all patches.
+        visit_data_writer->registerPlotQuantity("Ub", "VECTOR", ub_draw_idx);
+        for (int d = 0; d < NDIM; ++d)
+            visit_data_writer->registerPlotQuantity("Ub_" + std::to_string(d), "SCALAR", ub_draw_idx, d);
         ib_method_ops->initializeFEData();
         bdry_mesh_mapping->initializeFEData();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
@@ -769,6 +776,18 @@ main(int argc, char* argv[])
                 (MathUtilities<double>::equalEps(loop_time, next_viz_dump_time) || loop_time >= next_viz_dump_time))
             {
                 pout << "\nWriting visualization files...\n\n";
+                int coarsest_ln = 0, finest_ln = patch_hierarchy->getFinestLevelNumber();
+                const int u_idx =
+                    var_db->mapVariableAndContextToIndex(ub_vel_var, sb_adv_diff_integrator->getCurrentContext());
+                bool deallocate_after = !sb_adv_diff_integrator->isAllocatedPatchData(u_idx);
+                if (deallocate_after) sb_adv_diff_integrator->allocatePatchData(u_idx, coarsest_ln, finest_ln);
+                sb_adv_diff_integrator->allocatePatchData(ub_draw_idx, loop_time, coarsest_ln, finest_ln);
+                // Now fill in the velocity data and interpolate to cell centers
+                bound_vel_fcn->setDataOnPatchHierarchy(
+                    u_idx, ub_vel_var, patch_hierarchy, loop_time + dt, false, coarsest_ln, finest_ln);
+                HierarchyMathOps hier_math_ops("HierMathOps", patch_hierarchy, coarsest_ln, finest_ln);
+                Pointer<HierarchyGhostCellInterpolation> hier_ghost_cell = nullptr;
+                hier_math_ops.interp(ub_draw_idx, ub_draw_var, u_idx, ub_vel_var, hier_ghost_cell, loop_time, false);
                 if (uses_visit)
                 {
                     time_integrator->setupPlotData();
@@ -783,6 +802,9 @@ main(int argc, char* argv[])
                 output_net_force(eq_sys, loop_time);
                 next_viz_dump_time += viz_dump_time_interval;
                 viz_dump_iteration_num += 1;
+
+                if (deallocate_after) sb_adv_diff_integrator->deallocatePatchData(u_idx, coarsest_ln, finest_ln);
+                sb_adv_diff_integrator->deallocatePatchData(ub_draw_idx, coarsest_ln, finest_ln);
             }
             iteration_num = time_integrator->getIntegratorStep();
             loop_time = time_integrator->getIntegratorTime();
