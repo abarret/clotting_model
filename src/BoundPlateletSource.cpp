@@ -27,27 +27,14 @@ namespace clot
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
 BoundPlateletSource::BoundPlateletSource(std::string object_name,
-                                         Pointer<Variable<NDIM>> phi_b_var,
-                                         Pointer<Variable<NDIM>> bond_var,
                                          Pointer<Database> input_db)
     : CartGridFunction(std::move(object_name))
 {
-    // These need to be changed to the relevant parameters
-    // a0 Constants
-    d_Kab = input_db->getDouble("Kab");
-    d_Kaw = input_db->getDouble("Kaw");
+    // Parameters
+    d_Kab = input_db->getDouble("kab");
+    d_Kaw = input_db->getDouble("kaw");
     d_nb_max = input_db->getDouble("nb_max");
     d_nw_max = input_db->getDouble("nw_max");
-
-    d_var_integrator_pairs[0].first = phi_b_var;
-    d_var_integrator_pairs[2].first = bond_var;
-
-    // scratch indices
-    auto var_db = VariableDatabase<NDIM>::getDatabase();
-    d_bond_scr_idx =
-        var_db->registerVariableAndContext(bond_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
-    d_phi_b_scr_idx =
-        var_db->registerVariableAndContext(phi_b_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     return;
 } // BoundPlateletSource
 
@@ -224,6 +211,7 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
 
         (*F_data)(idx) = d_sign * (f_ba - f_ab);
     }
+
     return;
 } // setDataOnPatch
 } // namespace clot

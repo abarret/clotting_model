@@ -75,8 +75,8 @@ public:
     /*!
      * Set the bound platelet data. Used to compute xi.
      */
-    inline void setPlateletData(SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> phi_var,
-                                SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> integrator)
+    inline void setBoundPlateletData(SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> phi_var,
+                                     SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> integrator)
     {
         d_phi_var = phi_var;
         d_phi_integrator = integrator;
@@ -86,7 +86,7 @@ public:
     /*!
      * Set the fluid velocity data.
      */
-    inline void setVelocityData(SAMRAI::tbox::Pointer<SAMRAI::pdat::FaceVariable<NDIM, double>> uf_var,
+    inline void setVelocityData(SAMRAI::tbox::Pointer<SAMRAI::pdat::SideVariable<NDIM, double>> uf_var,
                                 SAMRAI::tbox::Pointer<IBAMR::INSHierarchyIntegrator> integrator)
     {
         d_uf_var = uf_var;
@@ -105,13 +105,22 @@ public:
         return;
     }
 
+    /*!
+     * Set the time points used to determine the correct velocity context.
+     */
+    inline void setTimePoints(const double current_time, const double new_time)
+    {
+        d_current_time = current_time;
+        d_new_time = new_time;
+    }
+
 private:
     BoundVelocityFunction() = delete;
     BoundVelocityFunction(const BoundVelocityFunction& from) = delete;
     BoundVelocityFunction& operator=(const BoundVelocityFunction& that) = delete;
 
     SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_sig_var, d_phi_var, d_bond_var;
-    SAMRAI::tbox::Pointer<SAMRAI::pdat::FaceVariable<NDIM, double>> d_uf_var;
+    SAMRAI::tbox::Pointer<SAMRAI::pdat::SideVariable<NDIM, double>> d_uf_var;
 
     SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_sig_integrator, d_phi_integrator, d_bond_integrator;
     SAMRAI::tbox::Pointer<IBAMR::INSHierarchyIntegrator> d_ins_integrator;
@@ -119,6 +128,9 @@ private:
     double d_thresh = 1.0e-8;
     double d_vol_pl = std::numeric_limits<double>::quiet_NaN(), d_c3 = std::numeric_limits<double>::quiet_NaN(),
            d_S0 = std::numeric_limits<double>::quiet_NaN(), d_R0 = std::numeric_limits<double>::quiet_NaN();
+
+    double d_current_time = std::numeric_limits<double>::quiet_NaN(),
+           d_new_time = std::numeric_limits<double>::quiet_NaN();
 };
 
 } // namespace clot

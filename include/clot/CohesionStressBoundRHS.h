@@ -111,7 +111,7 @@ public:
         d_beta_fcn = std::bind(wrapper, std::placeholders::_1, beta);
     }
 
-    inline void setOmegaIdx(const int w_idx)
+    inline void setWIdx(const int w_idx)
     {
         d_w_idx = w_idx;
     }

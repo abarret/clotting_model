@@ -1,0 +1,10 @@
+SET(SRCS main.cpp
+	 WallSitesMeshMapping.cpp)
+
+ADD_EXECUTABLE(aneurysm-bound EXCLUDE_FROM_ALL ${SRCS})
+SET_TARGET_PROPERTIES(aneurysm-bound PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/aneurysm/bound" OUTPUT_NAME main2d)
+TARGET_INCLUDE_DIRECTORIES(aneurysm-bound PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
+TARGET_LINK_LIBRARIES(aneurysm-bound PRIVATE BoundClot)
+ADD_DEPENDENCIES(aneurysm-bound BoundClot)
+ADD_DEPENDENCIES(aneurysm aneurysm-bound)

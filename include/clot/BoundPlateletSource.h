@@ -33,8 +33,6 @@ public:
      * \brief Class constructor.
      */
     BoundPlateletSource(std::string object_name,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_b_var,
-                        SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> bond_var,
                         SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
     /*!
      * \brief Deleted constructors.
@@ -53,8 +51,11 @@ public:
     inline void setBoundPlateletData(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_b_var,
                                      SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> phi_b_integrator)
     {
-        TBOX_ASSERT(phi_b_var == d_var_integrator_pairs[0].first);
+        d_var_integrator_pairs[0].first = phi_b_var;
         d_var_integrator_pairs[0].second = phi_b_integrator;
+        // Create scratch index with extra ghost cells
+        auto var_db = SAMRAI::hier::VariableDatabase<NDIM>::getDatabase();
+        d_phi_b_scr_idx = var_db->registerVariableAndContext(phi_b_var, var_db->getContext(d_object_name + "::CTX"), 4);
     }
     inline void setActivatedPlateletData(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> phi_a_var,
                                          SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> phi_a_integrator)
@@ -65,8 +66,11 @@ public:
     inline void setBondsData(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> bond_var,
                              SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> bond_integrator)
     {
-        TBOX_ASSERT(bond_var == d_var_integrator_pairs[2].first);
+        d_var_integrator_pairs[2].first = bond_var;
         d_var_integrator_pairs[2].second = bond_integrator;
+        // Create scratch index with extra ghost cells
+        auto var_db = SAMRAI::hier::VariableDatabase<NDIM>::getDatabase();
+        d_bond_scr_idx = var_db->registerVariableAndContext(bond_var, var_db->getContext(d_object_name + "::CTX"), 4);
     }
     inline void setStressData(SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>> sig_var,
                               SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> sig_integrator)
