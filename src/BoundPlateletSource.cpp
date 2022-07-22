@@ -154,7 +154,7 @@ void
 BoundPlateletSource::setDataOnPatch(const int data_idx,
                                     Pointer<Variable<NDIM>> /*var*/,
                                     Pointer<Patch<NDIM>> patch,
-                                    const double /*data_time*/,
+                                    const double data_time,
                                     const bool initial_time,
                                     Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
@@ -205,9 +205,11 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
             double fcn_der = 1.0 - nb * std::exp(-lambda);
             return std::make_pair(fcn, fcn_der);
         };
-        double P1 = 0.0;
-        if (z > 1.0e-8) P1 = boost::math::tools::newton_raphson_iterate(lambda_fcn, 0.5, 0.0, 1.0, 5);
-        const double f_ba = beta * z * P1;
+        double lambda = 0.0;
+        if (z > 1.0e-8)
+            lambda =
+                boost::math::tools::newton_raphson_iterate(lambda_fcn, 1.0, 0.0, std::numeric_limits<double>::max(), 5);
+        const double f_ba = beta * z * lambda / ((std::exp(lambda) - 1.0 + 1.0e-8));
 
         (*F_data)(idx) = d_sign * (f_ba - f_ab);
     }

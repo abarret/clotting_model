@@ -217,7 +217,7 @@ BoundVelocityFunction::setDataOnPatch(const int data_idx,
                 }
 
                 // Now compute the bound velocity field. Note we've handled the case of xi small above.
-                (*ub_data)(idx) = (*uf_data)(s_idx) + div_sig / xi;
+                (*ub_data)(idx) = (*uf_data)(s_idx) + div_sig / (xi + 1.0e-8);
             }
         }
     }

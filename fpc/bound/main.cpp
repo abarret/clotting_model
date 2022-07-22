@@ -502,7 +502,7 @@ main(int argc, char* argv[])
         // Activated platelets
         sb_adv_diff_integrator->registerTransportedQuantity(phi_a_var);
         sb_adv_diff_integrator->restrictToLevelSet(phi_a_var, ls_var);
-        Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_u_src");
+        Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
         sb_adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
         sb_adv_diff_integrator->setDiffusionCoefficient(phi_a_var, clot_params->getDouble("activated_diffusion_coef"));
         Pointer<BoundPlateletSource> phi_a_src_fcn = new BoundPlateletSource("UnactivatedPlatelets", clot_params);
@@ -546,7 +546,7 @@ main(int argc, char* argv[])
         phi_b_src_fcn->setSign(false);
         phi_b_src_fcn->setKernel(BSPLINE_3);
         phi_b_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
-        phi_b_src_fcn->setActivatedPlateletData(phi_b_var, sb_adv_diff_integrator);
+        phi_b_src_fcn->setActivatedPlateletData(phi_a_var, sb_adv_diff_integrator);
         phi_b_src_fcn->setBondsData(bond_var, sb_adv_diff_integrator);
         phi_b_src_fcn->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
         phi_b_src_fcn->setStressData(sig_var, adv_diff_integrator);
