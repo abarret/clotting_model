@@ -179,7 +179,7 @@ BoundVelocityFunction::setDataOnPatch(const int data_idx,
             // Drag coefficient
             double xi = d_c3 * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-8);
 
-            if (xi < d_thresh)
+            if (th < d_thresh)
             {
                 (*ub_data)(idx) = (*uf_data)(s_idx);
             }
