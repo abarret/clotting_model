@@ -200,7 +200,7 @@ wall_sites_ode(const double w,
                void* ctx)
 {
     auto params = static_cast<WallParams*>(ctx);
-    return -params->Kaw * params->nw_max * w * params->nb_max * fl_vals[0];
+    return -params->Kaw * params->nw_max * w * params->nb_max * std::max(fl_vals[0], 0.0);
 }
 
 static double init_wall_sites = std::numeric_limits<double>::quiet_NaN();
@@ -209,6 +209,8 @@ wall_sites_init(const VectorNd& /*X*/, const Node* const /*node*/)
 {
     return init_wall_sites;
 }
+
+void compute_drag_coef(int xi_idx, int phi_b_idx, double c3, double vol_plt, Pointer<PatchHierarchy<NDIM>> hierarchy);
 
 static std::ofstream force_stream, tether_stream;
 void output_net_force(EquationSystems* eq_sys, const double loop_time);
@@ -254,6 +256,7 @@ main(int argc, char* argv[])
 #endif
         const std::string base_mesh_filename = app_initializer->getExodusIIFilename("mesh_");
         const std::string bdry_mesh_filename = app_initializer->getExodusIIFilename("bdry_");
+        const std::string wall_mesh_filename = app_initializer->getExodusIIFilename("wall_");
 
         const bool dump_restart_data = app_initializer->dumpRestartData();
         const int restart_dump_interval = app_initializer->getRestartDumpInterval();
@@ -487,10 +490,6 @@ main(int argc, char* argv[])
         Pointer<FaceVariable<NDIM, double>> ub_vel_var = new FaceVariable<NDIM, double>("bound_velocity");
         sb_adv_diff_integrator->registerAdvectionVelocity(ub_vel_var);
         sb_adv_diff_integrator->setAdvectionVelocityFunction(ub_vel_var, bound_vel_fcn);
-        // Drawing for velocity
-        Pointer<CellVariable<NDIM, double>> ub_draw_var = new CellVariable<NDIM, double>("UB", NDIM);
-        auto var_db = VariableDatabase<NDIM>::getDatabase();
-        const int ub_draw_idx = var_db->registerVariableAndContext(ub_draw_var, var_db->getContext("Draw"));
 
         // Create beta function
         double beta_0 = input_db->getDouble("BETA_0");
@@ -722,17 +721,29 @@ main(int argc, char* argv[])
 
         EquationSystems* eq_sys = fe_data_manager->getEquationSystems();
         EquationSystems* bdry_eq_sys = bdry_mesh_mapping->getMeshPartitioner()->getEquationSystems();
+        EquationSystems* wall_eq_sys = wall_mesh_mapping->getMeshPartitioner()->getEquationSystems();
         std::unique_ptr<ExodusII_IO> exodus_io(uses_exodus ? new ExodusII_IO(mesh) : nullptr);
         std::unique_ptr<ExodusII_IO> bdry_io(uses_exodus ? new ExodusII_IO(*bdry_mesh_mapping->getBoundaryMesh()) :
+                                                           nullptr);
+        std::unique_ptr<ExodusII_IO> wall_io(uses_exodus ? new ExodusII_IO(*wall_mesh_mapping->getBoundaryMesh()) :
                                                            nullptr);
         bool from_restart = RestartManager::getManager()->isFromRestart();
         if (exodus_io) exodus_io->append(from_restart);
         if (bdry_io) bdry_io->append(from_restart);
+        if (wall_io) wall_io->append(from_restart);
+
+        // Drawing variables
+        Pointer<CellVariable<NDIM, double>> ub_draw_var = new CellVariable<NDIM, double>("UB", NDIM),
+                                            drag_var = new CellVariable<NDIM, double>("xi");
+        auto var_db = VariableDatabase<NDIM>::getDatabase();
+        const int ub_draw_idx = var_db->registerVariableAndContext(ub_draw_var, var_db->getContext("Draw"));
+        const int drag_idx = var_db->registerVariableAndContext(drag_var, var_db->getContext("Draw"));
 
         // Initialize hierarchy configuration and data on all patches.
         visit_data_writer->registerPlotQuantity("Ub", "VECTOR", ub_draw_idx);
         for (int d = 0; d < NDIM; ++d)
             visit_data_writer->registerPlotQuantity("Ub_" + std::to_string(d), "SCALAR", ub_draw_idx, d);
+        visit_data_writer->registerPlotQuantity("drag", "SCALAR", drag_idx);
         ib_method_ops->initializeFEData();
         bdry_mesh_mapping->initializeFEData();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
@@ -772,8 +783,8 @@ main(int argc, char* argv[])
         double dt = 0.0;
         while (!MathUtilities<double>::equalEps(loop_time, loop_time_end) && time_integrator->stepsRemaining())
         {
-            if (dump_viz_data &&
-                (MathUtilities<double>::equalEps(loop_time, next_viz_dump_time) || loop_time >= next_viz_dump_time))
+            if (dump_viz_data && (MathUtilities<double>::equalEps(loop_time, next_viz_dump_time) ||
+                                  loop_time >= next_viz_dump_time || loop_time >= 9.25))
             {
                 pout << "\nWriting visualization files...\n\n";
                 int coarsest_ln = 0, finest_ln = patch_hierarchy->getFinestLevelNumber();
@@ -782,9 +793,17 @@ main(int argc, char* argv[])
                 bool deallocate_after = !sb_adv_diff_integrator->isAllocatedPatchData(u_idx);
                 if (deallocate_after) sb_adv_diff_integrator->allocatePatchData(u_idx, coarsest_ln, finest_ln);
                 sb_adv_diff_integrator->allocatePatchData(ub_draw_idx, loop_time, coarsest_ln, finest_ln);
+                sb_adv_diff_integrator->allocatePatchData(drag_idx, loop_time, coarsest_ln, finest_ln);
                 // Now fill in the velocity data and interpolate to cell centers
                 bound_vel_fcn->setDataOnPatchHierarchy(
                     u_idx, ub_vel_var, patch_hierarchy, loop_time + dt, false, coarsest_ln, finest_ln);
+                const int phi_b_idx =
+                    var_db->mapVariableAndContextToIndex(phi_b_var, sb_adv_diff_integrator->getCurrentContext());
+                compute_drag_coef(drag_idx,
+                                  phi_b_idx,
+                                  clot_params->getDouble("c3"),
+                                  clot_params->getDouble("vol_pl"),
+                                  patch_hierarchy);
                 HierarchyMathOps hier_math_ops("HierMathOps", patch_hierarchy, coarsest_ln, finest_ln);
                 Pointer<HierarchyGhostCellInterpolation> hier_ghost_cell = nullptr;
                 hier_math_ops.interp(ub_draw_idx, ub_draw_var, u_idx, ub_vel_var, hier_ghost_cell, loop_time, false);
@@ -797,6 +816,7 @@ main(int argc, char* argv[])
                 {
                     exodus_io->write_timestep(base_mesh_filename, *eq_sys, viz_dump_iteration_num, loop_time);
                     bdry_io->write_timestep(bdry_mesh_filename, *bdry_eq_sys, viz_dump_iteration_num, loop_time);
+                    wall_io->write_timestep(wall_mesh_filename, *wall_eq_sys, viz_dump_iteration_num, loop_time);
                 }
 
                 output_net_force(eq_sys, loop_time);
@@ -805,6 +825,7 @@ main(int argc, char* argv[])
 
                 if (deallocate_after) sb_adv_diff_integrator->deallocatePatchData(u_idx, coarsest_ln, finest_ln);
                 sb_adv_diff_integrator->deallocatePatchData(ub_draw_idx, coarsest_ln, finest_ln);
+                sb_adv_diff_integrator->deallocatePatchData(drag_idx, coarsest_ln, finest_ln);
             }
             iteration_num = time_integrator->getIntegratorStep();
             loop_time = time_integrator->getIntegratorTime();
@@ -976,3 +997,26 @@ output_net_force(EquationSystems* equation_systems, const double loop_time)
     }
     return;
 } // postprocess_data
+
+void
+compute_drag_coef(int xi_idx, int phi_b_idx, double c3, double vol_plt, Pointer<PatchHierarchy<NDIM>> hierarchy)
+{
+    for (int ln = 0; ln <= hierarchy->getFinestLevelNumber(); ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+        {
+            Pointer<Patch<NDIM>> patch = level->getPatch(p());
+            Pointer<CellData<NDIM, double>> xi_data = patch->getPatchData(xi_idx);
+            Pointer<CellData<NDIM, double>> phi_b_data = patch->getPatchData(phi_b_idx);
+            for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
+            {
+                const CellIndex<NDIM>& idx = ci();
+                double th_b = vol_plt * (*phi_b_data)(idx);
+                double drag = 0.0;
+                drag = c3 * th_b * th_b / (std::pow(1.0 - th_b, 3.0) + 1.0e-8);
+                (*xi_data)(idx) = drag;
+            }
+        }
+    }
+}
