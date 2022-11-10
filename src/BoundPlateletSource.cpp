@@ -27,27 +27,14 @@ namespace clot
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
 BoundPlateletSource::BoundPlateletSource(std::string object_name,
-                                         Pointer<Variable<NDIM>> phi_b_var,
-                                         Pointer<Variable<NDIM>> bond_var,
                                          Pointer<Database> input_db)
     : CartGridFunction(std::move(object_name))
 {
-    // These need to be changed to the relevant parameters
-    // a0 Constants
-    d_Kab = input_db->getDouble("Kab");
-    d_Kaw = input_db->getDouble("Kaw");
+    // Parameters
+    d_Kab = input_db->getDouble("kab");
+    d_Kaw = input_db->getDouble("kaw");
     d_nb_max = input_db->getDouble("nb_max");
     d_nw_max = input_db->getDouble("nw_max");
-
-    d_var_integrator_pairs[0].first = phi_b_var;
-    d_var_integrator_pairs[2].first = bond_var;
-
-    // scratch indices
-    auto var_db = VariableDatabase<NDIM>::getDatabase();
-    d_bond_scr_idx =
-        var_db->registerVariableAndContext(bond_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
-    d_phi_b_scr_idx =
-        var_db->registerVariableAndContext(phi_b_var, var_db->getContext(d_object_name + "::ScrCtx"), 4 /*ghosts*/);
     return;
 } // BoundPlateletSource
 
@@ -167,7 +154,7 @@ void
 BoundPlateletSource::setDataOnPatch(const int data_idx,
                                     Pointer<Variable<NDIM>> /*var*/,
                                     Pointer<Patch<NDIM>> patch,
-                                    const double /*data_time*/,
+                                    const double data_time,
                                     const bool initial_time,
                                     Pointer<PatchLevel<NDIM>> /*patch_level*/)
 {
@@ -194,17 +181,18 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
         const double z = (*bond_data)(idx);
         // Unbound activated to bound
         const double R2 = d_Kab * phi_a *
-                          convolution(d_nb_max,
-                                      phi_b_data.getPointer(),
-                                      -2.0,
-                                      bond_data.getPointer(),
-                                      psi_fcn.first,
-                                      psi_fcn.second,
-                                      idx,
-                                      dx);
+                          std::max(convolution(d_nb_max,
+                                               phi_b_data.getPointer(),
+                                               -2.0,
+                                               bond_data.getPointer(),
+                                               psi_fcn.first,
+                                               psi_fcn.second,
+                                               idx,
+                                               dx),
+                                   0.0);
 
-        const double R4 = d_Kaw * d_nw_max * w * phi_a;
-        const double f_ab = 1.0 / d_nb * R2 + 1.0 / d_nw * R4;
+        const double R4 = d_Kaw * d_nw_max * w * d_nb_max * phi_a;
+        const double f_ab = R2 / d_nb + R4 / d_nw;
 
         // Bound to unbound activated
         double trace = 0.0;
@@ -218,12 +206,15 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
             double fcn_der = 1.0 - nb * std::exp(-lambda);
             return std::make_pair(fcn, fcn_der);
         };
-        double P1 = 0.0;
-        if (z > 1.0e-8) P1 = boost::math::tools::newton_raphson_iterate(lambda_fcn, 0.5, 0.0, 1.0, 5);
-        const double f_ba = beta * z * P1;
+        double lambda = 0.0;
+        if (z > 1.0e-8)
+            lambda = boost::math::tools::newton_raphson_iterate(
+                lambda_fcn, 0.0, -std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), 5);
+        const double f_ba = beta * z * lambda / ((std::exp(lambda) - 1.0 + 1.0e-8));
 
         (*F_data)(idx) = d_sign * (f_ba - f_ab);
     }
+
     return;
 } // setDataOnPatch
 } // namespace clot

@@ -60,6 +60,14 @@ CohesionStressBoundRHS::setDataOnPatchHierarchy(const int data_idx,
     coarsest_ln = (coarsest_ln == -1 ? 0 : coarsest_ln);
     finest_ln = (finest_ln == -1 ? hierarchy->getFinestLevelNumber() : finest_ln);
 
+    // Allocate scratch data
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        level->allocatePatchData(d_phi_b_scr_idx, data_time);
+        level->allocatePatchData(d_bond_scr_idx, data_time);
+    }
+
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto& var_integrator_pair : d_var_integrator_pairs)
     {
@@ -76,7 +84,7 @@ CohesionStressBoundRHS::setDataOnPatchHierarchy(const int data_idx,
         {
             int var_cur_idx = var_db->mapVariableAndContextToIndex(var, integrator->getCurrentContext());
             int var_new_idx = var_db->mapVariableAndContextToIndex(var, integrator->getNewContext());
-            const bool var_new_is_allocated = integrator->isAllocatedPatchData(var_scr_idx);
+            const bool var_new_is_allocated = integrator->isAllocatedPatchData(var_new_idx);
             auto hier_data_ops_manager = HierarchyDataOpsManager<NDIM>::getManager();
             Pointer<HierarchyDataOpsReal<NDIM, double>> hier_cc_data_ops =
                 hier_data_ops_manager->getOperationsDouble(var, hierarchy, /*get_unique*/ true);
@@ -138,6 +146,14 @@ CohesionStressBoundRHS::setDataOnPatchHierarchy(const int data_idx,
             int var_scr_idx = var_db->mapVariableAndContextToIndex(var, integrator->getScratchContext());
             integrator->deallocatePatchData(var_scr_idx);
         }
+    }
+
+    // Deallocate other data
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        level->deallocatePatchData(d_phi_b_scr_idx);
+        level->deallocatePatchData(d_bond_scr_idx);
     }
     return;
 } // setDataOnPatchHierarchy

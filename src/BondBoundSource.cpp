@@ -52,6 +52,14 @@ BondBoundSource::setDataOnPatchHierarchy(const int data_idx,
     coarsest_ln = (coarsest_ln == -1 ? 0 : coarsest_ln);
     finest_ln = (finest_ln == -1 ? hierarchy->getFinestLevelNumber() : finest_ln);
 
+    // Allocate scratch data
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        level->allocatePatchData(d_phi_b_scr_idx, data_time);
+        level->allocatePatchData(d_bond_scr_idx, data_time);
+    }
+
     std::map<Pointer<Variable<NDIM>>, bool> scratch_allocated;
     for (const auto& var_integrator_pair : d_var_integrator_pairs)
     {
@@ -130,6 +138,14 @@ BondBoundSource::setDataOnPatchHierarchy(const int data_idx,
             int var_scr_idx = var_db->mapVariableAndContextToIndex(var, integrator->getScratchContext());
             integrator->deallocatePatchData(var_scr_idx);
         }
+    }
+
+    // Deallocate scratch data
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        level->deallocatePatchData(d_phi_b_scr_idx);
+        level->deallocatePatchData(d_bond_scr_idx);
     }
     return;
 } // setDataOnPatchHierarchy

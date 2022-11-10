@@ -4,25 +4,35 @@ PROJECT(Clotting LANGUAGES C CXX)
 FIND_PACKAGE(IBAMR REQUIRED)
 FIND_PACKAGE(ADS REQUIRED)
 
-SET(CXX_SRC
-    src/BondBoundSource.cpp
+SET(UNBOUND_CXX_SRC
     src/BondUnactivatedSource.cpp
-    src/BoundExtraStressForcing.cpp
-    src/BoundPlateletSource.cpp
     src/BoundaryMeshMapping.cpp
-    src/BoundVelocityFunction.cpp
-    src/CohesionStressBoundRHS.cpp
     src/CohesionStressUnactivatedRHS.cpp
     src/UnactivatedPlateletSource.cpp
     src/utility_functions.cpp
     )
 
-ADD_LIBRARY(Clot)
-TARGET_SOURCES(Clot PRIVATE ${CXX_SRC})
-TARGET_INCLUDE_DIRECTORIES(Clot PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/> $<INSTALL_INTERFACE:${CMAKE_INSTALL_DIR}/include/>)
-TARGET_LINK_LIBRARIES(Clot PUBLIC IBAMR::IBAMR2d)
-TARGET_LINK_LIBRARIES(Clot PUBLIC ADS::ADS2d)
+SET(BOUND_CXX_SRC
+    src/BondBoundSource.cpp
+    src/BoundExtraStressForcing.cpp
+    src/BoundPlateletSource.cpp
+    src/BoundaryMeshMapping.cpp
+    src/BoundVelocityFunction.cpp
+    src/CohesionStressBoundRHS.cpp
+    src/utility_functions.cpp
+    )
 
+ADD_LIBRARY(UnboundClot)
+TARGET_SOURCES(UnboundClot PRIVATE ${UNBOUND_CXX_SRC})
+TARGET_INCLUDE_DIRECTORIES(UnboundClot PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/> $<INSTALL_INTERFACE:${CMAKE_INSTALL_DIR}/include/>)
+TARGET_LINK_LIBRARIES(UnboundClot PUBLIC IBAMR::IBAMR2d)
+TARGET_LINK_LIBRARIES(UnboundClot PUBLIC ADS::ADS2d)
+
+ADD_LIBRARY(BoundClot)
+TARGET_SOURCES(BoundClot PRIVATE ${BOUND_CXX_SRC})
+TARGET_INCLUDE_DIRECTORIES(BoundClot PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/> $<INSTALL_INTERFACE:${CMAKE_INSTALL_DIR}/include/>)
+TARGET_LINK_LIBRARIES(BoundClot PUBLIC IBAMR::IBAMR2d)
+TARGET_LINK_LIBRARIES(BoundClot PUBLIC ADS::ADS2d)
 
 ADD_SUBDIRECTORY(fpc)
 ADD_SUBDIRECTORY(aneurysm)
