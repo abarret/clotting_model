@@ -1,5 +1,5 @@
-#ifndef included_clot_BoundVelocityFunction
-#define included_clot_BoundVelocityFunction
+#ifndef included_clot_DragForce
+#define included_clot_DragForce
 
 /////////////////////////////// INCLUDES /////////////////////////////////////
 
@@ -19,18 +19,18 @@ namespace clot
 /*!
  * \brief Computes the bound velocity field u_b
  */
-class BoundVelocityFunction : public IBTK::CartGridFunction
+class DragForce : public IBTK::CartGridFunction
 {
 public:
     /*!
      * \brief Constructor.
      */
-    BoundVelocityFunction(const std::string& object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    DragForce(const std::string& object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
 
     /*!
      * \brief Destructor.
      */
-    ~BoundVelocityFunction();
+    ~DragForce();
 
     /*!
      * Indicates whether the concrete CartGridFunction object is time dependent.
@@ -59,20 +59,6 @@ public:
                         SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> level = nullptr) override;
 
     /*!
-     * Set the extra stress tensor data.
-     *
-     * \note This must be done outside of the constructor because of how the velocity function is read by the
-     * integrator.
-     */
-    inline void setSigmaData(SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> sig_var,
-                             SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> integrator)
-    {
-        d_sig_var = sig_var;
-        d_sig_integrator = integrator;
-        return;
-    }
-
-    /*!
      * Set the bound platelet data. Used to compute xi.
      */
     inline void setBoundPlateletData(SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> phi_var,
@@ -95,13 +81,13 @@ public:
     }
 
     /*!
-     * Set the bond data.
+     * Set the bound velocity data.
      */
-    inline void setBondData(SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> bond_var,
-                            SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> integrator)
+    inline void setBoundVelocityData(SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> ub_var,
+                                     SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> integrator)
     {
-        d_bond_var = bond_var;
-        d_bond_integrator = integrator;
+        d_ub_var = ub_var;
+        d_ub_integrator = integrator;
         return;
     }
 
@@ -115,19 +101,17 @@ public:
     }
 
 private:
-    BoundVelocityFunction() = delete;
-    BoundVelocityFunction(const BoundVelocityFunction& from) = delete;
-    BoundVelocityFunction& operator=(const BoundVelocityFunction& that) = delete;
+    DragForce() = delete;
+    DragForce(const DragForce& from) = delete;
+    DragForce& operator=(const DragForce& that) = delete;
 
-    SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_sig_var, d_phi_var, d_bond_var;
+    SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_phi_var, d_ub_var;
     SAMRAI::tbox::Pointer<SAMRAI::pdat::SideVariable<NDIM, double>> d_uf_var;
 
-    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_sig_integrator, d_phi_integrator, d_bond_integrator;
+    SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_phi_integrator, d_ub_integrator;
     SAMRAI::tbox::Pointer<IBAMR::INSHierarchyIntegrator> d_ins_integrator;
 
-    double d_thresh = 1.0e-8;
-    double d_vol_pl = std::numeric_limits<double>::quiet_NaN(), d_c3 = std::numeric_limits<double>::quiet_NaN(),
-           d_S0 = std::numeric_limits<double>::quiet_NaN(), d_R0 = std::numeric_limits<double>::quiet_NaN();
+    double d_vol_pl = std::numeric_limits<double>::quiet_NaN(), d_c3 = std::numeric_limits<double>::quiet_NaN();
 
     double d_current_time = std::numeric_limits<double>::quiet_NaN(),
            d_new_time = std::numeric_limits<double>::quiet_NaN();

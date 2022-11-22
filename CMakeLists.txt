@@ -17,8 +17,10 @@ SET(BOUND_CXX_SRC
     src/BoundExtraStressForcing.cpp
     src/BoundPlateletSource.cpp
     src/BoundaryMeshMapping.cpp
-    src/BoundVelocityFunction.cpp
+    src/BoundVelocitySource.cpp
+    src/CellToFaceFcn.cpp
     src/CohesionStressBoundRHS.cpp
+    src/DragForce.cpp
     src/utility_functions.cpp
     )
 

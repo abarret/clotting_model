@@ -17,9 +17,11 @@
 #include <clot/BondBoundSource.h>
 #include <clot/BoundExtraStressForcing.h>
 #include <clot/BoundPlateletSource.h>
-#include <clot/BoundVelocityFunction.h>
+#include <clot/BoundVelocitySource.h>
 #include <clot/BoundaryMeshMapping.h>
+#include <clot/CellToFaceFcn.h>
 #include <clot/CohesionStressBoundRHS.h>
+#include <clot/DragForce.h>
 #include <clot/app_namespaces.h>
 
 #include <ADS/CutCellVolumeMeshMapping.h>
@@ -209,8 +211,6 @@ wall_sites_init(const VectorNd& /*X*/, const Node* const /*node*/)
 {
     return init_wall_sites;
 }
-
-void compute_drag_coef(int xi_idx, int phi_b_idx, double c3, double vol_plt, Pointer<PatchHierarchy<NDIM>> hierarchy);
 
 static std::ofstream force_stream, tether_stream;
 void output_net_force(EquationSystems* eq_sys, const double loop_time);
@@ -451,18 +451,17 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> phi_b_var = new CellVariable<NDIM, double>("phi_b");
         Pointer<CellVariable<NDIM, double>> phi_a_var = new CellVariable<NDIM, double>("phi_a");
         Pointer<CellVariable<NDIM, double>> bond_var = new CellVariable<NDIM, double>("bond");
+        Pointer<CellVariable<NDIM, double>> ub_var = new CellVariable<NDIM, double>("Bound Velocity", NDIM);
 
         // Pull out the database everything uses
         Pointer<Database> clot_params = app_initializer->getComponentDatabase("ClotParams");
-
-        // Create velocity function
-        Pointer<BoundVelocityFunction> bound_vel_fcn = new BoundVelocityFunction("BoundVelocityFunction", clot_params);
+        Pointer<CellToFaceFcn> cell_to_face_fcn = new CellToFaceFcn("BoundAdvFcn", ub_var, adv_diff_integrator);
 
         // Set up Cohesion stress tensor
         Pointer<CFINSForcing> cohesionStressForcing =
             new CFINSForcing("CohesionStressForcing",
                              app_initializer->getComponentDatabase("CohesionStress"),
-                             static_cast<Pointer<CartGridFunction>>(bound_vel_fcn),
+                             static_cast<Pointer<CartGridFunction>>(cell_to_face_fcn),
                              grid_geometry,
                              adv_diff_integrator,
                              visit_data_writer);
@@ -475,21 +474,46 @@ main(int argc, char* argv[])
         cohesionStressForcing->registerRelaxationOperator(cohesion_relax);
         Pointer<CellVariable<NDIM, double>> sig_var = cohesionStressForcing->getVariable();
 
-        // Additional forcing for nondivergence-free velocity
-        Pointer<BoundExtraStressForcing> extra_forcing =
-            new BoundExtraStressForcing("BoundExtraStressForcing", clot_params);
-        extra_forcing->setBondData(bond_var, sb_adv_diff_integrator);
-        extra_forcing->setStressData(sig_var, adv_diff_integrator);
-        ins_integrator->registerBodyForceFunction(extra_forcing);
-
         // Set up bound velocity function and register it with the sb integrator
-        bound_vel_fcn->setBondData(bond_var, sb_adv_diff_integrator);
-        bound_vel_fcn->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
-        bound_vel_fcn->setVelocityData(ins_integrator->getVelocityVariable(), ins_integrator);
-        bound_vel_fcn->setSigmaData(sig_var, adv_diff_integrator);
-        Pointer<FaceVariable<NDIM, double>> ub_vel_var = new FaceVariable<NDIM, double>("bound_velocity");
-        sb_adv_diff_integrator->registerAdvectionVelocity(ub_vel_var);
-        sb_adv_diff_integrator->setAdvectionVelocityFunction(ub_vel_var, bound_vel_fcn);
+        Pointer<FaceVariable<NDIM, double>> ub_adv_var = new FaceVariable<NDIM, double>("bound_velocity");
+        sb_adv_diff_integrator->registerAdvectionVelocity(ub_adv_var);
+        sb_adv_diff_integrator->setAdvectionVelocityFunction(ub_adv_var, cell_to_face_fcn);
+        adv_diff_integrator->registerAdvectionVelocity(ub_adv_var);
+        adv_diff_integrator->setAdvectionVelocityFunction(ub_adv_var, cell_to_face_fcn);
+
+        // Create the bound velocity solver.
+        Pointer<BoundVelocitySource> ub_src_fcn = new BoundVelocitySource("BoundVelocitySource", clot_params);
+        ub_src_fcn->setBondData(bond_var, sb_adv_diff_integrator);
+        ub_src_fcn->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
+        ub_src_fcn->setSigmaData(sig_var, adv_diff_integrator);
+        ub_src_fcn->setVelocityData(ins_integrator->getVelocityVariable(), ins_integrator);
+        ub_src_fcn->setBoundVelocityData(ub_var, adv_diff_integrator);
+        adv_diff_integrator->registerTransportedQuantity(ub_var);
+        adv_diff_integrator->setAdvectionVelocity(ub_var, ub_adv_var);
+        std::vector<RobinBcCoefStrategy<NDIM>*> ub_bcs(NDIM, nullptr);
+        if (grid_geometry->getPeriodicShift().min() == 0)
+        {
+            for (int d = 0; d < NDIM; ++d)
+            {
+                ub_bcs[d] = new muParserRobinBcCoefs(
+                    "BoundVelocityBc_" + std::to_string(d),
+                    app_initializer->getComponentDatabase("BoundVelocityBc_" + std::to_string(d)),
+                    grid_geometry);
+            }
+        }
+        adv_diff_integrator->setPhysicalBcCoefs(ub_var, ub_bcs);
+        adv_diff_integrator->setDiffusionCoefficient(ub_var, input_db->getDouble("MU"));
+        Pointer<CellVariable<NDIM, double>> ub_src_var = new CellVariable<NDIM, double>("Ub src", NDIM);
+        adv_diff_integrator->registerSourceTerm(ub_src_var);
+        adv_diff_integrator->setSourceTermFunction(ub_src_var, ub_src_fcn);
+        adv_diff_integrator->setSourceTerm(ub_var, ub_src_var);
+
+        // Drag force
+        Pointer<DragForce> drag_force = new DragForce("DragForce", clot_params);
+        drag_force->setBoundPlateletData(phi_b_var, sb_adv_diff_integrator);
+        drag_force->setVelocityData(ins_integrator->getVelocityVariable(), ins_integrator);
+        drag_force->setBoundVelocityData(ub_var, adv_diff_integrator);
+        ins_integrator->registerBodyForceFunction(drag_force);
 
         // Create beta function
         double beta_0 = input_db->getDouble("BETA_0");
@@ -539,7 +563,7 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->registerTransportedQuantity(phi_b_var);
         sb_adv_diff_integrator->restrictToLevelSet(phi_b_var, ls_var);
         Pointer<CellVariable<NDIM, double>> phi_b_src_var = new CellVariable<NDIM, double>("phi_b_src");
-        sb_adv_diff_integrator->setAdvectionVelocity(phi_b_var, ub_vel_var);
+        sb_adv_diff_integrator->setAdvectionVelocity(phi_b_var, ub_adv_var);
         sb_adv_diff_integrator->setDiffusionCoefficient(phi_b_var, clot_params->getDouble("bound_diffusion_coef"));
         Pointer<BoundPlateletSource> phi_b_src_fcn = new BoundPlateletSource("BoundPlatelets", clot_params);
         phi_b_src_fcn->setSign(false);
@@ -575,7 +599,7 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->registerTransportedQuantity(bond_var);
         sb_adv_diff_integrator->restrictToLevelSet(bond_var, ls_var);
         Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
-        sb_adv_diff_integrator->setAdvectionVelocity(bond_var, ub_vel_var);
+        sb_adv_diff_integrator->setAdvectionVelocity(bond_var, ub_adv_var);
         sb_adv_diff_integrator->setDiffusionCoefficient(bond_var, 0.0);
         Pointer<BondBoundSource> bond_src_fcn = new BondBoundSource("BondSource", clot_params);
         bond_src_fcn->registerBetaFcn(beta_wrapper, static_cast<void*>(&betaFcn));
@@ -732,18 +756,7 @@ main(int argc, char* argv[])
         if (bdry_io) bdry_io->append(from_restart);
         if (wall_io) wall_io->append(from_restart);
 
-        // Drawing variables
-        Pointer<CellVariable<NDIM, double>> ub_draw_var = new CellVariable<NDIM, double>("UB", NDIM),
-                                            drag_var = new CellVariable<NDIM, double>("xi");
-        auto var_db = VariableDatabase<NDIM>::getDatabase();
-        const int ub_draw_idx = var_db->registerVariableAndContext(ub_draw_var, var_db->getContext("Draw"));
-        const int drag_idx = var_db->registerVariableAndContext(drag_var, var_db->getContext("Draw"));
-
         // Initialize hierarchy configuration and data on all patches.
-        visit_data_writer->registerPlotQuantity("Ub", "VECTOR", ub_draw_idx);
-        for (int d = 0; d < NDIM; ++d)
-            visit_data_writer->registerPlotQuantity("Ub_" + std::to_string(d), "SCALAR", ub_draw_idx, d);
-        visit_data_writer->registerPlotQuantity("drag", "SCALAR", drag_idx);
         ib_method_ops->initializeFEData();
         bdry_mesh_mapping->initializeFEData();
         time_integrator->initializePatchHierarchy(patch_hierarchy, gridding_algorithm);
@@ -783,30 +796,10 @@ main(int argc, char* argv[])
         double dt = 0.0;
         while (!MathUtilities<double>::equalEps(loop_time, loop_time_end) && time_integrator->stepsRemaining())
         {
-            if (dump_viz_data && (MathUtilities<double>::equalEps(loop_time, next_viz_dump_time) ||
-                                  loop_time >= next_viz_dump_time || loop_time >= 9.25))
+            if (dump_viz_data &&
+                (MathUtilities<double>::equalEps(loop_time, next_viz_dump_time) || loop_time >= next_viz_dump_time))
             {
                 pout << "\nWriting visualization files...\n\n";
-                int coarsest_ln = 0, finest_ln = patch_hierarchy->getFinestLevelNumber();
-                const int u_idx =
-                    var_db->mapVariableAndContextToIndex(ub_vel_var, sb_adv_diff_integrator->getCurrentContext());
-                bool deallocate_after = !sb_adv_diff_integrator->isAllocatedPatchData(u_idx);
-                if (deallocate_after) sb_adv_diff_integrator->allocatePatchData(u_idx, coarsest_ln, finest_ln);
-                sb_adv_diff_integrator->allocatePatchData(ub_draw_idx, loop_time, coarsest_ln, finest_ln);
-                sb_adv_diff_integrator->allocatePatchData(drag_idx, loop_time, coarsest_ln, finest_ln);
-                // Now fill in the velocity data and interpolate to cell centers
-                bound_vel_fcn->setDataOnPatchHierarchy(
-                    u_idx, ub_vel_var, patch_hierarchy, loop_time + dt, false, coarsest_ln, finest_ln);
-                const int phi_b_idx =
-                    var_db->mapVariableAndContextToIndex(phi_b_var, sb_adv_diff_integrator->getCurrentContext());
-                compute_drag_coef(drag_idx,
-                                  phi_b_idx,
-                                  clot_params->getDouble("c3"),
-                                  clot_params->getDouble("vol_pl"),
-                                  patch_hierarchy);
-                HierarchyMathOps hier_math_ops("HierMathOps", patch_hierarchy, coarsest_ln, finest_ln);
-                Pointer<HierarchyGhostCellInterpolation> hier_ghost_cell = nullptr;
-                hier_math_ops.interp(ub_draw_idx, ub_draw_var, u_idx, ub_vel_var, hier_ghost_cell, loop_time, false);
                 if (uses_visit)
                 {
                     time_integrator->setupPlotData();
@@ -823,9 +816,6 @@ main(int argc, char* argv[])
                 next_viz_dump_time += viz_dump_time_interval;
                 viz_dump_iteration_num += 1;
 
-                if (deallocate_after) sb_adv_diff_integrator->deallocatePatchData(u_idx, coarsest_ln, finest_ln);
-                sb_adv_diff_integrator->deallocatePatchData(ub_draw_idx, coarsest_ln, finest_ln);
-                sb_adv_diff_integrator->deallocatePatchData(drag_idx, coarsest_ln, finest_ln);
             }
             iteration_num = time_integrator->getIntegratorStep();
             loop_time = time_integrator->getIntegratorTime();
@@ -836,8 +826,6 @@ main(int argc, char* argv[])
             pout << "Simulation time is " << loop_time << "\n";
 
             dt = time_integrator->getMaximumTimeStepSize();
-            // Set time points for velocity function
-            bound_vel_fcn->setTimePoints(loop_time, loop_time + dt);
             time_integrator->advanceHierarchy(dt);
             loop_time += dt;
 
@@ -878,6 +866,11 @@ main(int argc, char* argv[])
             tether_stream.close();
         }
 
+        for (unsigned int d = 0; d < NDIM; ++d)
+        {
+            delete ub_bcs[d];
+            delete u_bc_coefs[d];
+        }
     } // cleanup dynamically allocated objects prior to shutdown
 } // main
 
@@ -997,26 +990,3 @@ output_net_force(EquationSystems* equation_systems, const double loop_time)
     }
     return;
 } // postprocess_data
-
-void
-compute_drag_coef(int xi_idx, int phi_b_idx, double c3, double vol_plt, Pointer<PatchHierarchy<NDIM>> hierarchy)
-{
-    for (int ln = 0; ln <= hierarchy->getFinestLevelNumber(); ++ln)
-    {
-        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
-        for (PatchLevel<NDIM>::Iterator p(level); p; p++)
-        {
-            Pointer<Patch<NDIM>> patch = level->getPatch(p());
-            Pointer<CellData<NDIM, double>> xi_data = patch->getPatchData(xi_idx);
-            Pointer<CellData<NDIM, double>> phi_b_data = patch->getPatchData(phi_b_idx);
-            for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
-            {
-                const CellIndex<NDIM>& idx = ci();
-                double th_b = vol_plt * (*phi_b_data)(idx);
-                double drag = 0.0;
-                drag = c3 * th_b * th_b / (std::pow(1.0 - th_b, 3.0) + 1.0e-8);
-                (*xi_data)(idx) = drag;
-            }
-        }
-    }
-}
