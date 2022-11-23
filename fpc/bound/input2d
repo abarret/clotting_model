@@ -16,7 +16,7 @@ NX = RATIO*NY                                 // number of grid cells on coarses
 // Note that we use the same grid spacing in both directions
 NFINEST = (REF_RATIO^(MAX_LEVELS - 1))*NX  // effective number of grid cells on finest grid level in the X direction
 DX = LX / NFINEST
-VIZ_DUMP_TIME_INTERVAL = 0.1
+VIZ_DUMP_TIME_INTERVAL = 0.01
 
 // Complex Fluid parameters
 FLUID_MODEL = "USER_DEFINED"
@@ -25,6 +25,7 @@ LOG_DETERMINANT     = TRUE
 CONVECTIVE_OPERATOR_TYPE     = "WAVE_PROP"
 OUTPUT_CONFORMATION_TENSOR = TRUE
 OUTPUT_STRESS_TENSOR = FALSE
+OUTPUT_DIVERGENCE = TRUE
 RELAXATION_TIME = 1.0 // Only used to compute force from stress tensor
 VISCOSITY = 1.0       // Only used to compute force from stress tensor
 USING_EXACT_U = FALSE
@@ -42,7 +43,7 @@ USE_OUTSIDE_LS_FOR_TAGGING = TRUE
 ADV_INT_METHOD = "MIDPOINT_RULE"
 DIF_INT_METHOD = "TRAPEZOIDAL_RULE"
 USE_RBFS = TRUE
-RBF_STENCIL_SIZE = 5
+RBF_STENCIL_SIZE = 10
 RBF_POLY_ORDER = "LINEAR"
 
 // solver parameters
@@ -80,9 +81,9 @@ ENABLE_LOGGING     = TRUE
 //Advection Diffusion solver parameters
 ADV_DIFF_SOLVER_TYPE = "SEMI_IMPLICIT"
 ADV_DIFF_NUM_CYCLES = 2
-ADV_DIFF_CONVECTIVE_OP_TYPE = "WAVE_PROP"
+ADV_DIFF_CONVECTIVE_OP_TYPE = "PPM"
 ADV_DIFF_CONVECTIVE_TS_TYPE = "TRAPEZOIDAL_RULE"
-ADV_DIFF_CONVECTIVE_FORM = "ADVECTIVE"
+ADV_DIFF_CONVECTIVE_FORM = "CONSERVATIVE"
 
 // collocated solver parameters
 PROJECTION_METHOD_TYPE = "PRESSURE_UPDATE"
@@ -99,27 +100,26 @@ ELEM_ORDER = "FIRST"
 
 Amplitude = 1.0
 Frequency = 4.0
-T_START = 25.0
+T_START = 2500.0
 
 // Clot parameters
 WALL_SITES_INIT = 1.0
-THRESHOLD = 1.0e-8
 ACTIVATED_DIFFUSION_COEF = 1.0e-7
 BOUND_DIFFUSION_COEF = 0.0
-C3 = 1.0
-C4 = 4.0
+C3 = 100.0
+C4 = 0.001
 NB_MAX = 1.0
 NW_MAX = 1.0
 BETA_0 = 0.01
 BETA_1 = 0.01
 R_0 = 1.0
-KAB = 2.0
-KBB = 2.0
-KAW = 2.0
+KAB = 1.0
+KBB = 1.0
+KAW = 1.0
 R0 = 1.0
 S0 = 1.0
-PL_A_IN = 0.0
-VOL_PL = 0.01
+PL_A_IN = 1.0
+VOL_PL = 1.0
 
 U = "(tanh((t - thalf)/tau) + tanh(thalf/tau)) / (1.0 + tanh(thalf/tau)) * -p_grad / (2.0 * mu) * (X_1 - 2.0) * (X_1 + 2.0)"
 
@@ -136,7 +136,6 @@ ClotParams
   r0 = R0
   s0 = S0
   c3 = C3
-  threshold = THRESHOLD
   vol_pl = VOL_PL
   c4 = C4
 }
@@ -281,6 +280,7 @@ log_determinant     = LOG_DETERMINANT
 convective_operator_type     = CONVECTIVE_OPERATOR_TYPE
 output_stress_tensor = OUTPUT_STRESS_TENSOR
 output_conformation_tensor = OUTPUT_CONFORMATION_TENSOR
+output_divergence = OUTPUT_DIVERGENCE
 interp_type = BDRY_INTERP_TYPE
 }
 
@@ -328,6 +328,40 @@ VelocityBcCoefs_1 {
    gcoef_function_3 = "0.0"
 }
 
+BoundVelocityBc_0 {
+  acoef_function_0 = "0.0"
+  acoef_function_1 = "0.0"
+  acoef_function_2 = "1.0"
+  acoef_function_3 = "1.0"
+
+  bcoef_function_0 = "1.0"
+  bcoef_function_1 = "1.0"
+  bcoef_function_2 = "0.0"
+  bcoef_function_3 = "0.0"
+
+  gcoef_function_0 = "0.0"
+  gcoef_function_1 = "0.0"
+  gcoef_function_2 = "0.0"
+  gcoef_function_3 = "0.0"
+}
+
+BoundVelocityBc_1 {
+  acoef_function_0 = "0.0"
+  acoef_function_1 = "0.0"
+  acoef_function_2 = "1.0"
+  acoef_function_3 = "1.0"
+
+  bcoef_function_0 = "1.0"
+  bcoef_function_1 = "1.0"
+  bcoef_function_2 = "0.0"
+  bcoef_function_3 = "0.0"
+
+  gcoef_function_0 = "0.0"
+  gcoef_function_1 = "0.0"
+  gcoef_function_2 = "0.0"
+  gcoef_function_3 = "0.0"
+}
+
 PressureInitialConditions {
    nu = MU/RHO
    function = "0"
@@ -359,6 +393,7 @@ INSStaggeredHierarchyIntegrator {
    output_Omega                  = OUTPUT_OMEGA
    output_Div_U                  = OUTPUT_DIV_U
    enable_logging                = ENABLE_LOGGING
+   U_P_bdry_interp_type = "QUADRATIC"
 
    stokes_solver_type = "PETSC_KRYLOV_SOLVER"
    stokes_precond_type = "PROJECTION_PRECONDITIONER"
@@ -444,7 +479,7 @@ Main {
 
 // visualization dump parameters
    viz_writer                  = "VisIt"
-   viz_dump_interval           = 100
+   viz_dump_interval           = 1
    viz_dump_dirname            = "visit"
    visit_number_procs_per_file = 1
 
