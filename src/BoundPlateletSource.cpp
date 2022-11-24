@@ -180,18 +180,14 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
         const double phi_b = (*phi_b_data)(idx);
         const double z = (*bond_data)(idx);
         // Unbound activated to bound
-        const double R2 = d_Kab * phi_a *
-                          std::max(convolution(d_nb_max,
-                                               phi_b_data.getPointer(),
-                                               -2.0,
-                                               bond_data.getPointer(),
-                                               psi_fcn.first,
-                                               psi_fcn.second,
-                                               idx,
-                                               dx),
-                                   0.0);
+        const double R2 =
+            d_Kab * phi_a *
+            std::max(
+                convolution(
+                    1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx),
+                0.0);
 
-        const double R4 = d_Kaw * d_nw_max * w * d_nb_max * phi_a;
+        const double R4 = d_Kaw * w * phi_a;
         const double f_ab = R2 / d_nb + R4 / d_nw;
 
         // Bound to unbound activated
@@ -210,7 +206,7 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
         if (z > 1.0e-8)
             lambda = boost::math::tools::newton_raphson_iterate(
                 lambda_fcn, 0.0, -std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), 5);
-        const double f_ba = beta * z * lambda / ((std::exp(lambda) - 1.0 + 1.0e-8));
+        const double f_ba = beta * z * d_nb_max * lambda / ((std::exp(lambda) - 1.0 + 1.0e-8));
 
         (*F_data)(idx) = d_sign * (f_ba - f_ab);
     }

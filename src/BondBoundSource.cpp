@@ -183,17 +183,13 @@ BondBoundSource::setDataOnPatch(const int data_idx,
         const double z = (*bond_data)(idx);
         const double w = (*w_data)(idx);
         // Compute sources
-        double R2 = d_Kab * d_nb_max * phi_a *
-                    convolution(d_nb_max,
-                                phi_b_data.getPointer(),
-                                -2.0,
-                                bond_data.getPointer(),
-                                psi_fcn.first,
-                                psi_fcn.second,
-                                idx,
-                                dx);
-        double R3 = d_Kbb * std::pow(d_nb_max * phi_b - 2.0 * z, 2.0);
-        double R4 = d_Kaw * d_nw_max * w * d_nb_max * phi_a;
+        double R2 =
+            d_Kab * phi_a *
+            convolution(
+                1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx) /
+            d_nb_max;
+        double R3 = d_Kbb * std::pow(phi_b - 2.0 * z, 2.0) / d_nb_max;
+        double R4 = d_Kaw * w * phi_a / d_nb_max;
 
         const double alpha = R2 + R3 + R4;
 
