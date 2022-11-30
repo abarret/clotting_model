@@ -3,6 +3,8 @@
 
 /////////////////////////////// INCLUDES /////////////////////////////////////
 
+#include <clot/ClotParameters.h>
+
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
 #include <ibamr/INSHierarchyIntegrator.h>
 
@@ -25,7 +27,7 @@ public:
     /*!
      * \brief Constructor.
      */
-    DragForce(const std::string& object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    DragForce(const std::string& object_name, BoundClotParams clot_params);
 
     /*!
      * \brief Destructor.
@@ -111,7 +113,7 @@ private:
     SAMRAI::tbox::Pointer<IBAMR::AdvDiffHierarchyIntegrator> d_phi_integrator, d_ub_integrator;
     SAMRAI::tbox::Pointer<IBAMR::INSHierarchyIntegrator> d_ins_integrator;
 
-    double d_vol_pl = std::numeric_limits<double>::quiet_NaN(), d_c3 = std::numeric_limits<double>::quiet_NaN();
+    const BoundClotParams& d_clot_params;
 
     double d_current_time = std::numeric_limits<double>::quiet_NaN(),
            d_new_time = std::numeric_limits<double>::quiet_NaN();

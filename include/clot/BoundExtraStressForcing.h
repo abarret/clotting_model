@@ -14,6 +14,7 @@
 #ifndef included_clot_BoundExtraStressForcing
 #define included_clot_BoundExtraStressForcing
 
+#include <clot/ClotParameters.h>
 #include <clot/utility_functions.h>
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
@@ -52,7 +53,7 @@ public:
     /*!
      * \brief Class constructor.
      */
-    BoundExtraStressForcing(std::string object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    BoundExtraStressForcing(std::string object_name, BoundClotParams clot_params);
 
     /*!
      * \brief Empty destructor.
@@ -119,7 +120,7 @@ private:
     void
     findFactor(SAMRAI::tbox::Pointer<SAMRAI::hier::PatchHierarchy<NDIM>> hierarchy, int coarsest_ln, int finest_ln);
 
-    double d_S0 = std::numeric_limits<double>::quiet_NaN(), d_R0 = std::numeric_limits<double>::quiet_NaN();
+    const BoundClotParams& d_clot_params;
 
     std::array<std::pair<SAMRAI::tbox::Pointer<SAMRAI::hier::Variable<NDIM>>,
                          SAMRAI::tbox::Pointer<IBTK::HierarchyIntegrator>>,

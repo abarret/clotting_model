@@ -19,6 +19,7 @@ SET(BOUND_CXX_SRC
     src/BoundaryMeshMapping.cpp
     src/BoundVelocitySource.cpp
     src/CellToFaceFcn.cpp
+    src/ClotParameters.cpp
     src/CohesionStressBoundRHS.cpp
     src/DragForce.cpp
     src/utility_functions.cpp

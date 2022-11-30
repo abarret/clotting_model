@@ -7,15 +7,12 @@
 
 namespace clot
 {
-BoundVelocitySource::BoundVelocitySource(const string& object_name, Pointer<Database> input_db)
-    : CartGridFunction(object_name)
+BoundVelocitySource::BoundVelocitySource(const string& object_name, BoundClotParams clot_params)
+    : CartGridFunction(object_name), d_clot_params(std::move(clot_params))
 {
-    d_c3 = input_db->getDouble("c3");
-    d_vol_pl = input_db->getDouble("vol_pl");
-    d_R0 = input_db->getDouble("r0");
-    d_S0 = input_db->getDouble("s0");
+    // intentionally blank
     return;
-} // UFunction
+}
 
 BoundVelocitySource::~BoundVelocitySource()
 {
@@ -184,7 +181,8 @@ BoundVelocitySource::setDataOnPatch(const int data_idx,
 #endif
 
     // Convert to the correct form of stress
-    Pointer<CellData<NDIM, double>> sig_data = convertToStress(*sig0_data, *bond_data, patch, d_S0, d_R0, true);
+    Pointer<CellData<NDIM, double>> sig_data =
+        convertToStress(*sig0_data, *bond_data, patch, d_clot_params.S0, d_clot_params.R0, true);
 
     const Box<NDIM>& box = patch->getBox();
     Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
@@ -195,8 +193,8 @@ BoundVelocitySource::setDataOnPatch(const int data_idx,
         const CellIndex<NDIM>& idx = ci();
 
         // Get drag force
-        double th = d_vol_pl * (*phi_data)(idx);
-        double xi = d_c3 * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-8);
+        double th = d_clot_params.vol_pl * (*phi_data)(idx);
+        double xi = d_clot_params.drag_coef * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-8);
         VectorNd drag_force;
         for (int d = 0; d < NDIM; ++d)
         {

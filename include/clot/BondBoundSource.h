@@ -14,6 +14,7 @@
 #ifndef included_clot_BondBoundSource
 #define included_clot_BondBoundSource
 
+#include <clot/ClotParameters.h>
 #include <clot/utility_functions.h>
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
@@ -52,7 +53,7 @@ public:
     /*!
      * \brief Class constructor.
      */
-    BondBoundSource(std::string object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    BondBoundSource(std::string object_name, BoundClotParams clot_params);
 
     /*!
      * \brief Empty destructor.
@@ -153,9 +154,7 @@ public:
     //\}
 
 private:
-    double d_Kab = std::numeric_limits<double>::quiet_NaN(), d_Kbb = std::numeric_limits<double>::quiet_NaN(),
-           d_Kaw = std::numeric_limits<double>::quiet_NaN(), d_nb_max = std::numeric_limits<double>::quiet_NaN(),
-           d_nw_max = std::numeric_limits<double>::quiet_NaN();
+    const BoundClotParams& d_clot_params;
 
     Kernel d_kernel = UNKNOWN_KERNEL;
 

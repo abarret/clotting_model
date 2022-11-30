@@ -26,16 +26,10 @@
 // Namespace
 namespace clot
 {
-CohesionStressBoundRHS::CohesionStressBoundRHS(std::string object_name, Pointer<Database> input_db)
-    : CFRelaxationOperator(std::move(object_name), input_db)
+CohesionStressBoundRHS::CohesionStressBoundRHS(std::string object_name, BoundClotParams clot_params)
+    : CFRelaxationOperator(std::move(object_name), nullptr), d_clot_params(std::move(clot_params))
 {
-    // Get values from input
-    d_c4 = input_db->getDouble("c4");
-    d_Kab = input_db->getDouble("kab");
-    d_Kbb = input_db->getDouble("kbb");
-    d_Kaw = input_db->getDouble("kaw");
-    d_nb_max = input_db->getDouble("nb_max");
-    d_nw_max = input_db->getDouble("nw_max");
+    // intentionall blank
     return;
 } // Constructor
 
@@ -191,11 +185,11 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
         const double w = (*w_data)(idx);
         // Compute sources
         double R2 =
-            d_Kab * phi_a *
+            d_clot_params.Kab * phi_a *
             convolution(
                 1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx);
-        double R3 = d_Kbb * std::pow(phi_b - 2.0 * z, 2.0);
-        double R4 = d_Kaw * w * phi_a;
+        double R3 = d_clot_params.Kbb * std::pow(phi_b - 2.0 * z, 2.0);
+        double R4 = d_clot_params.Kaw * w * phi_a;
 
         const double alpha = R2 + R3 + R4;
 
@@ -205,14 +199,14 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
         const double y_brackets = trace / (z + 1.0e-8);
         double beta = d_beta_fcn(y_brackets);
 #if (NDIM == 2)
-        (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*sig_data)(idx, 0);
-        (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*sig_data)(idx, 1);
+        (*ret_data)(idx, 0) = d_clot_params.stress_growth * alpha - beta * (*sig_data)(idx, 0);
+        (*ret_data)(idx, 1) = d_clot_params.stress_growth * alpha - beta * (*sig_data)(idx, 1);
         (*ret_data)(idx, 2) = -beta * (*sig_data)(idx, 2);
 #endif
 #if (NDIM == 3)
-        (*ret_data)(idx, 0) = d_c4 * alpha - beta * (*sig_data)(idx, 0);
-        (*ret_data)(idx, 1) = d_c4 * alpha - beta * (*sig_data)(idx, 1);
-        (*ret_data)(idx, 2) = d_c4 * alpha - beta * (*sig_data)(idx, 2);
+        (*ret_data)(idx, 0) = d_clot_params.stress_growth * alpha - beta * (*sig_data)(idx, 0);
+        (*ret_data)(idx, 1) = d_clot_params.stress_growth * alpha - beta * (*sig_data)(idx, 1);
+        (*ret_data)(idx, 2) = d_clot_params.stress_growth * alpha - beta * (*sig_data)(idx, 2);
         (*ret_data)(idx, 3) = -beta * (*sig_data)(idx, 3);
         (*ret_data)(idx, 4) = -beta * (*sig_data)(idx, 4);
         (*ret_data)(idx, 5) = -beta * (*sig_data)(idx, 5);

@@ -23,15 +23,10 @@
 namespace clot
 {
 /////////////////////////////// PUBLIC ///////////////////////////////////////
-BondBoundSource::BondBoundSource(std::string object_name, Pointer<Database> input_db)
-    : CartGridFunction(std::move(object_name))
+BondBoundSource::BondBoundSource(std::string object_name, BoundClotParams clot_params)
+    : CartGridFunction(std::move(object_name)), d_clot_params(std::move(clot_params))
 {
-    // Get values from input
-    d_Kab = input_db->getDouble("kab");
-    d_Kbb = input_db->getDouble("kbb");
-    d_Kaw = input_db->getDouble("kaw");
-    d_nb_max = input_db->getDouble("nb_max");
-    d_nw_max = input_db->getDouble("nw_max");
+    // intentionally blank
 } // BondBoundSource
 
 bool
@@ -184,12 +179,12 @@ BondBoundSource::setDataOnPatch(const int data_idx,
         const double w = (*w_data)(idx);
         // Compute sources
         double R2 =
-            d_Kab * phi_a *
+            d_clot_params.Kab * phi_a *
             convolution(
                 1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx) /
-            d_nb_max;
-        double R3 = d_Kbb * std::pow(phi_b - 2.0 * z, 2.0) / d_nb_max;
-        double R4 = d_Kaw * w * phi_a / d_nb_max;
+            d_clot_params.nb_max;
+        double R3 = d_clot_params.Kbb * std::pow(phi_b - 2.0 * z, 2.0) / d_clot_params.nb_max;
+        double R4 = d_clot_params.Kaw * w * phi_a / d_clot_params.nb_max;
 
         const double alpha = R2 + R3 + R4;
 

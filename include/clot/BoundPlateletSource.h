@@ -14,6 +14,7 @@
 #ifndef included_clot_BoundPlateletSource
 #define included_clot_BoundPlateletSource
 
+#include <clot/ClotParameters.h>
 #include <clot/utility_functions.h>
 
 #include <ibamr/AdvDiffHierarchyIntegrator.h>
@@ -32,8 +33,7 @@ public:
     /*!
      * \brief Class constructor.
      */
-    BoundPlateletSource(std::string object_name,
-                        SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    BoundPlateletSource(std::string object_name, BoundClotParams clot_params);
     /*!
      * \brief Deleted constructors.
      */
@@ -136,11 +136,7 @@ public:
     }
 
 private:
-    double d_Kab = std::numeric_limits<double>::quiet_NaN();
-    double d_Kaw = std::numeric_limits<double>::quiet_NaN();
-    double d_nb_max = std::numeric_limits<double>::quiet_NaN();
-    double d_nw_max = std::numeric_limits<double>::quiet_NaN();
-    double d_nb = 1.0, d_nw = 1.0;
+    const BoundClotParams& d_clot_params;
     double d_sign = 1.0;
     Kernel d_kernel = UNKNOWN_KERNEL;
 

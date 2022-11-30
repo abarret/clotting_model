@@ -20,6 +20,7 @@
 #include <clot/BoundVelocitySource.h>
 #include <clot/BoundaryMeshMapping.h>
 #include <clot/CellToFaceFcn.h>
+#include <clot/ClotParameters.h>
 #include <clot/CohesionStressBoundRHS.h>
 #include <clot/DragForce.h>
 #include <clot/app_namespaces.h>
@@ -181,19 +182,6 @@ tether_force_function(VectorValue<double>& F,
 } // namespace ModelData
 using namespace ModelData;
 
-struct WallParams
-{
-    WallParams(Pointer<Database> input_db)
-    {
-        Kaw = input_db->getDouble("kaw");
-        nw_max = input_db->getDouble("nw_max");
-        nb_max = input_db->getDouble("nb_max");
-    }
-    double Kaw;
-    double nw_max;
-    double nb_max;
-};
-
 double
 wall_sites_ode(const double w,
                const std::vector<double>& fl_vals,
@@ -201,11 +189,11 @@ wall_sites_ode(const double w,
                double /*time*/,
                void* ctx)
 {
-    auto params = static_cast<WallParams*>(ctx);
+    auto params = static_cast<BoundClotParams*>(ctx);
     return -params->Kaw * params->nw_max * w * params->nb_max * std::max(fl_vals[0], 0.0);
 }
 
-static double init_wall_sites = std::numeric_limits<double>::quiet_NaN();
+static double init_wall_sites = 1.0;
 double
 wall_sites_init(const VectorNd& /*X*/, const Node* const /*node*/)
 {
@@ -214,6 +202,16 @@ wall_sites_init(const VectorNd& /*X*/, const Node* const /*node*/)
 
 static std::ofstream force_stream, tether_stream;
 void output_net_force(EquationSystems* eq_sys, const double loop_time);
+
+void compute_plot_quantities(int drag_idx,
+                             int div_sig_idx,
+                             Pointer<PatchHierarchy<NDIM>> hierarchy,
+                             Pointer<INSHierarchyIntegrator> ins_integrator,
+                             Pointer<CFINSForcing> cf_forcing,
+                             int ub_idx,
+                             int phib_idx,
+                             double vol_pl,
+                             double C3);
 
 /*******************************************************************************
  * For each run, the input filename and restart information (if needed) must   *
@@ -395,6 +393,8 @@ main(int argc, char* argv[])
         Pointer<CartGridFunction> p_init = new muParserCartGridFunction(
             "p_init", app_initializer->getComponentDatabase("PressureInitialConditions"), grid_geometry);
         ins_integrator->registerPressureInitialConditions(p_init);
+        Pointer<CartGridFunction> phi_init = new muParserCartGridFunction(
+            "phi_init", app_initializer->getComponentDatabase("PhiInitialConditions"), grid_geometry);
 
         // Configure the IBFE solver
         ib_method_ops->initializeFEEquationSystems();
@@ -454,7 +454,7 @@ main(int argc, char* argv[])
         Pointer<CellVariable<NDIM, double>> ub_var = new CellVariable<NDIM, double>("Bound Velocity", NDIM);
 
         // Pull out the database everything uses
-        Pointer<Database> clot_params = app_initializer->getComponentDatabase("ClotParams");
+        BoundClotParams clot_params(app_initializer->getComponentDatabase("ClotParams"));
         Pointer<CellToFaceFcn> cell_to_face_fcn = new CellToFaceFcn("BoundAdvFcn", ub_var, adv_diff_integrator);
 
         // Set up Cohesion stress tensor
@@ -527,7 +527,8 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->restrictToLevelSet(phi_a_var, ls_var);
         Pointer<CellVariable<NDIM, double>> phi_a_src_var = new CellVariable<NDIM, double>("phi_a_src");
         sb_adv_diff_integrator->setAdvectionVelocity(phi_a_var, ins_integrator->getAdvectionVelocityVariable());
-        sb_adv_diff_integrator->setDiffusionCoefficient(phi_a_var, clot_params->getDouble("activated_diffusion_coef"));
+        sb_adv_diff_integrator->setDiffusionCoefficient(phi_a_var, clot_params.phi_a_diff_coef);
+        sb_adv_diff_integrator->setInitialConditions(phi_a_var, phi_init);
         Pointer<BoundPlateletSource> phi_a_src_fcn = new BoundPlateletSource("UnactivatedPlatelets", clot_params);
         phi_a_src_fcn->setSign(true);
         phi_a_src_fcn->setKernel(BSPLINE_3);
@@ -564,7 +565,7 @@ main(int argc, char* argv[])
         sb_adv_diff_integrator->restrictToLevelSet(phi_b_var, ls_var);
         Pointer<CellVariable<NDIM, double>> phi_b_src_var = new CellVariable<NDIM, double>("phi_b_src");
         sb_adv_diff_integrator->setAdvectionVelocity(phi_b_var, ub_adv_var);
-        sb_adv_diff_integrator->setDiffusionCoefficient(phi_b_var, clot_params->getDouble("bound_diffusion_coef"));
+        sb_adv_diff_integrator->setDiffusionCoefficient(phi_b_var, clot_params.phi_b_diff_coef);
         Pointer<BoundPlateletSource> phi_b_src_fcn = new BoundPlateletSource("BoundPlatelets", clot_params);
         phi_b_src_fcn->setSign(false);
         phi_b_src_fcn->setKernel(BSPLINE_3);
@@ -632,7 +633,6 @@ main(int argc, char* argv[])
 
         // Wall sites
         const std::string wall_sites_name = "WallSites";
-        WallParams wall_params(clot_params);
         FEDataManager* fe_data_manager = ib_method_ops->getFEDataManager();
         auto wall_mesh_mapping =
             std::make_shared<WallSitesMeshMapping>("WallSitesMesh",
@@ -650,10 +650,9 @@ main(int argc, char* argv[])
         sb_coupling_manager->registerFluidConcentration(phi_a_var);
         sb_coupling_manager->registerSurfaceConcentration(wall_sites_name);
         sb_coupling_manager->registerSurfaceReactionFunction(
-            wall_sites_name, wall_sites_ode, static_cast<void*>(&wall_params));
+            wall_sites_name, wall_sites_ode, static_cast<void*>(&clot_params));
         sb_coupling_manager->registerFluidConcentration(phi_a_var);
         sb_coupling_manager->registerFluidSurfaceDependence(wall_sites_name, phi_a_var);
-        init_wall_sites = clot_params->getDouble("wall_sites_init");
         sb_coupling_manager->registerInitialConditions(wall_sites_name, wall_sites_init);
         sb_coupling_manager->initializeFEData();
         Pointer<SBIntegrator> sb_integrator = new SBIntegrator("SBIntegrator", sb_coupling_manager);
@@ -756,6 +755,16 @@ main(int argc, char* argv[])
         if (bdry_io) bdry_io->append(from_restart);
         if (wall_io) wall_io->append(from_restart);
 
+        // Create extra drawing variables
+        auto var_db = VariableDatabase<NDIM>::getDatabase();
+        Pointer<CellVariable<NDIM, double>> drag_var = new CellVariable<NDIM, double>("DragForce", NDIM),
+                                            div_sig_var = new CellVariable<NDIM, double>("DivSig", NDIM);
+        const int drag_idx = var_db->registerVariableAndContext(drag_var, var_db->getContext("Draw"));
+        const int div_sig_idx = var_db->registerVariableAndContext(div_sig_var, var_db->getContext("Draw"));
+
+        visit_data_writer->registerPlotQuantity("DragForce", "VECTOR", drag_idx);
+        visit_data_writer->registerPlotQuantity("DivSig", "VECTOR", div_sig_idx);
+
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
         bdry_mesh_mapping->initializeFEData();
@@ -802,8 +811,27 @@ main(int argc, char* argv[])
                 pout << "\nWriting visualization files...\n\n";
                 if (uses_visit)
                 {
+                    const int phib_idx =
+                        var_db->mapVariableAndContextToIndex(phi_b_var, sb_adv_diff_integrator->getCurrentContext());
+                    const int ub_idx =
+                        var_db->mapVariableAndContextToIndex(ub_var, adv_diff_integrator->getCurrentContext());
+                    adv_diff_integrator->allocatePatchData(
+                        drag_idx, loop_time, 0, patch_hierarchy->getFinestLevelNumber());
+                    adv_diff_integrator->allocatePatchData(
+                        div_sig_idx, loop_time, 0, patch_hierarchy->getFinestLevelNumber());
+                    compute_plot_quantities(drag_idx,
+                                            div_sig_idx,
+                                            patch_hierarchy,
+                                            ins_integrator,
+                                            cohesionStressForcing,
+                                            ub_idx,
+                                            phib_idx,
+                                            clot_params.vol_pl,
+                                            clot_params.drag_coef);
                     time_integrator->setupPlotData();
                     visit_data_writer->writePlotData(patch_hierarchy, iteration_num, loop_time);
+                    adv_diff_integrator->deallocatePatchData(drag_idx, 0, patch_hierarchy->getFinestLevelNumber());
+                    adv_diff_integrator->deallocatePatchData(div_sig_idx, 0, patch_hierarchy->getFinestLevelNumber());
                 }
                 if (uses_exodus)
                 {
@@ -815,7 +843,6 @@ main(int argc, char* argv[])
                 output_net_force(eq_sys, loop_time);
                 next_viz_dump_time += viz_dump_time_interval;
                 viz_dump_iteration_num += 1;
-
             }
             iteration_num = time_integrator->getIntegratorStep();
             loop_time = time_integrator->getIntegratorTime();
@@ -990,3 +1017,79 @@ output_net_force(EquationSystems* equation_systems, const double loop_time)
     }
     return;
 } // postprocess_data
+
+void
+compute_plot_quantities(const int drag_idx,
+                        const int div_sig_idx,
+                        Pointer<PatchHierarchy<NDIM>> hierarchy,
+                        Pointer<INSHierarchyIntegrator> ins_integrator,
+                        Pointer<CFINSForcing> cf_forcing,
+                        const int ub_idx,
+                        const int phib_idx,
+                        const double vol_pl,
+                        const double C3)
+
+{
+    const int coarsest_ln = 0, finest_ln = hierarchy->getFinestLevelNumber();
+    Pointer<AdvDiffHierarchyIntegrator> adv_diff_integrator = cf_forcing->getAdvDiffHierarchyIntegrator();
+    auto var_db = VariableDatabase<NDIM>::getDatabase();
+    const int uf_idx = var_db->mapVariableAndContextToIndex(ins_integrator->getVelocityVariable(),
+                                                            ins_integrator->getCurrentContext());
+    const int sig_idx = cf_forcing->getVariableIdx();
+
+    // Need to fill in ghost data for divergence
+    const int sig_scr_idx =
+        var_db->mapVariableAndContextToIndex(cf_forcing->getVariable(), adv_diff_integrator->getScratchContext());
+    const bool scr_is_allocated = adv_diff_integrator->isAllocatedPatchData(sig_scr_idx, coarsest_ln, finest_ln);
+    if (!scr_is_allocated) adv_diff_integrator->allocatePatchData(sig_scr_idx, 0.0, coarsest_ln, finest_ln);
+    using ITC = HierarchyGhostCellInterpolation::InterpolationTransactionComponent;
+    std::vector<ITC> ghost_cell_comp(1);
+    ghost_cell_comp[0] =
+        ITC(sig_scr_idx, sig_idx, "CONSERVATIVE_LINEAR_REFINE", false, "NONE", "LINEAR", false, nullptr);
+    HierarchyGhostCellInterpolation ghost_cell_fill;
+    ghost_cell_fill.initializeOperatorState(ghost_cell_comp, hierarchy, coarsest_ln, finest_ln);
+    ghost_cell_fill.fillData(0.0);
+
+    // Compute forces
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+        {
+            Pointer<Patch<NDIM>> patch = level->getPatch(p());
+            Pointer<CellData<NDIM, double>> ub_data = patch->getPatchData(ub_idx);
+            Pointer<SideData<NDIM, double>> uf_data = patch->getPatchData(uf_idx);
+            Pointer<CellData<NDIM, double>> drag_data = patch->getPatchData(drag_idx);
+            Pointer<CellData<NDIM, double>> phib_data = patch->getPatchData(phib_idx);
+
+            Pointer<CellData<NDIM, double>> div_sig_data = patch->getPatchData(div_sig_idx);
+            Pointer<CellData<NDIM, double>> sig_data = patch->getPatchData(sig_scr_idx);
+
+            Pointer<CartesianPatchGeometry<NDIM>> pgeom = patch->getPatchGeometry();
+            const double* const dx = pgeom->getDx();
+
+            for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
+            {
+                const CellIndex<NDIM>& idx = ci();
+
+                // Compute drag force
+                const double th = vol_pl * (*phib_data)(idx);
+                const double xi = C3 * th * th / std::pow(1.0 - th, 3.0);
+                for (int d = 0; d < NDIM; ++d)
+                {
+                    const SideIndex<NDIM> idx_u(idx, d, 1), idx_l(idx, d, 0);
+                    (*drag_data)(idx, d) = xi * ((*ub_data)(idx, d) - 0.5 * ((*uf_data)(idx_u) + (*uf_data)(idx_l)));
+                }
+
+                // Compute divergence
+                IntVector<NDIM> x(1, 0), y(0, 1);
+                (*div_sig_data)(idx, 0) = ((*sig_data)(idx + x, 0) - (*sig_data)(idx - x, 0)) / (2.0 * dx[0]) +
+                                          ((*sig_data)(idx + y, 2) - (*sig_data)(idx - y, 2)) / (2.0 * dx[1]);
+                (*div_sig_data)(idx, 1) = ((*sig_data)(idx + x, 2) - (*sig_data)(idx - x, 2)) / (2.0 * dx[0]) +
+                                          ((*sig_data)(idx + y, 1) - (*sig_data)(idx - y, 1)) / (2.0 * dx[1]);
+            }
+        }
+    }
+
+    if (!scr_is_allocated) adv_diff_integrator->deallocatePatchData(sig_scr_idx, coarsest_ln, finest_ln);
+}

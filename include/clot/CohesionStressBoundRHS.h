@@ -20,6 +20,7 @@
 
 #include <ibamr/config.h>
 
+#include <clot/ClotParameters.h>
 #include <clot/utility_functions.h>
 
 #include <ibamr/CFRelaxationOperator.h>
@@ -58,7 +59,7 @@ public:
     /*!
      * \brief This constructor reads in the parameters for the model from the input database.
      */
-    CohesionStressBoundRHS(std::string object_name, SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> input_db);
+    CohesionStressBoundRHS(std::string object_name, BoundClotParams clot_params);
 
     /*!
      * \brief Deleted constructors
@@ -151,9 +152,7 @@ public:
     //\}
 
 private:
-    double d_c4 = std::numeric_limits<double>::quiet_NaN(), d_Kab = std::numeric_limits<double>::quiet_NaN(),
-           d_Kbb = std::numeric_limits<double>::quiet_NaN(), d_Kaw = std::numeric_limits<double>::quiet_NaN(),
-           d_nb_max = std::numeric_limits<double>::quiet_NaN(), d_nw_max = std::numeric_limits<double>::quiet_NaN();
+    const BoundClotParams& d_clot_params;
 
     Kernel d_kernel = UNKNOWN_KERNEL;
 

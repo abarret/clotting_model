@@ -23,14 +23,11 @@
 namespace clot
 {
 /////////////////////////////// PUBLIC ///////////////////////////////////////
-BoundExtraStressForcing::BoundExtraStressForcing(std::string object_name, Pointer<Database> input_db)
+BoundExtraStressForcing::BoundExtraStressForcing(std::string object_name, BoundClotParams clot_params)
     : CartGridFunction(std::move(object_name)),
+      d_clot_params(std::move(clot_params)),
       d_extra_stress_var(new CellVariable<NDIM, double>(d_object_name + "::Var"))
 {
-    // Get values from input
-    d_R0 = input_db->getDouble("r0");
-    d_S0 = input_db->getDouble("s0");
-
     // Create variable for the extra stress
     // Note it only has depth of one because it's a multiple of the identity matrix.
     auto var_db = VariableDatabase<NDIM>::getDatabase();
@@ -178,7 +175,8 @@ BoundExtraStressForcing::findFactor(Pointer<PatchHierarchy<NDIM>> hierarchy, con
                 const double z = (*bond_data)(idx);
                 double tr = 0.0;
                 for (int d = 0; d < NDIM; ++d) tr += (*sig_data)(idx, d);
-                (*extra_data)(idx) = z * d_S0 * d_R0 * std::sqrt(2.0 * tr / (d_S0 * z + 1.0e-8));
+                (*extra_data)(idx) =
+                    z * d_clot_params.S0 * d_clot_params.R0 * std::sqrt(2.0 * tr / (d_clot_params.S0 * z + 1.0e-8));
             }
         }
     }

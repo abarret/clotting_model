@@ -7,12 +7,12 @@
 
 namespace clot
 {
-DragForce::DragForce(const string& object_name, Pointer<Database> input_db) : CartGridFunction(object_name)
+DragForce::DragForce(const string& object_name, BoundClotParams clot_params)
+    : CartGridFunction(object_name), d_clot_params(std::move(clot_params))
 {
-    d_c3 = input_db->getDouble("c3");
-    d_vol_pl = input_db->getDouble("vol_pl");
+    // intentionall blank
     return;
-} // UFunction
+}
 
 DragForce::~DragForce()
 {
@@ -139,8 +139,8 @@ DragForce::setDataOnPatch(const int data_idx,
 
             // Get the drag coefficient
             double phi = 0.5 * ((*phi_data)(idx.toCell(1)) + (*phi_data)(idx.toCell(0)));
-            double th = d_vol_pl * phi;
-            double xi = d_c3 * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-8);
+            double th = d_clot_params.vol_pl * phi;
+            double xi = d_clot_params.drag_coef * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-8);
 
             // Now compute drag force
             double ub = 0.5 * ((*ub_data)(idx.toCell(1), axis) + (*ub_data)(idx.toCell(0), axis));
