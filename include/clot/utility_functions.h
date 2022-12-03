@@ -54,6 +54,7 @@ double convolution_mask(double alpha,
 template <typename Array>
 Array convertToStress(const Array& si, double bond, double S0, double R0);
 IBTK::MatrixNd convertToStressMatrix(const IBTK::MatrixNd& si, double bond, double S0, double R0);
+
 /*!
  * \brief Modifies the pointer provided to update the stress components.
  */
@@ -62,6 +63,7 @@ void convertToStressPtr(double* const si, double bond, double S0, double R0);
  * \brief Returns the factor that modifies the stress tensor.
  */
 double modifiedStressFactor(double tr, double bond, double S0, double R0);
+
 /*!
  * \brief Convert the cell data of the stress tensor on a given patch. An optional flag determines whether to convert
  * ghost cell data too.

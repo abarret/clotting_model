@@ -59,7 +59,7 @@ public:
     /*!
      * \brief This constructor reads in the parameters for the model from the input database.
      */
-    CohesionStressBoundRHS(std::string object_name, BoundClotParams clot_params);
+    CohesionStressBoundRHS(std::string object_name, const BoundClotParams& clot_params);
 
     /*!
      * \brief Deleted constructors

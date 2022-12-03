@@ -7,8 +7,8 @@
 
 namespace clot
 {
-BoundVelocitySource::BoundVelocitySource(const string& object_name, BoundClotParams clot_params)
-    : CartGridFunction(object_name), d_clot_params(std::move(clot_params))
+BoundVelocitySource::BoundVelocitySource(const string& object_name, const BoundClotParams& clot_params)
+    : CartGridFunction(object_name), d_clot_params(clot_params)
 {
     // intentionally blank
     return;

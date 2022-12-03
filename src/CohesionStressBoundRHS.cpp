@@ -26,8 +26,8 @@
 // Namespace
 namespace clot
 {
-CohesionStressBoundRHS::CohesionStressBoundRHS(std::string object_name, BoundClotParams clot_params)
-    : CFRelaxationOperator(std::move(object_name), nullptr), d_clot_params(std::move(clot_params))
+CohesionStressBoundRHS::CohesionStressBoundRHS(std::string object_name, const BoundClotParams& clot_params)
+    : CFRelaxationOperator(std::move(object_name), nullptr), d_clot_params(clot_params)
 {
     // intentionall blank
     return;
@@ -196,7 +196,7 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
         // Stress decay
         double trace = 0.0;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
-        const double y_brackets = trace / (z + 1.0e-8);
+        const double y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-8));
         double beta = d_beta_fcn(y_brackets);
 #if (NDIM == 2)
         (*ret_data)(idx, 0) = d_clot_params.stress_growth * alpha - beta * (*sig_data)(idx, 0);

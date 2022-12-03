@@ -53,7 +53,7 @@ public:
     /*!
      * \brief Class constructor.
      */
-    BondBoundSource(std::string object_name, BoundClotParams clot_params);
+    BondBoundSource(std::string object_name, const BoundClotParams& clot_params);
 
     /*!
      * \brief Empty destructor.

@@ -76,7 +76,7 @@ inline double
 modifiedStressFactor(double tr, const double bond, const double S0, const double R0)
 {
     if (bond < 1.0e-8) return tr;
-    tr = -bond * S0 * R0 * std::sqrt(2.0 * tr / (S0 * bond + 1.0e-8));
+    tr = -bond * S0 * R0 * std::sqrt(2.0 * tr / (S0 * bond + 1.0e-8)) / 6.0;
     return tr;
 }
 } // namespace clot

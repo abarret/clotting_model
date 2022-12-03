@@ -27,7 +27,7 @@ public:
     /*!
      * \brief Constructor.
      */
-    BoundVelocitySource(const std::string& object_name, BoundClotParams clot_params);
+    BoundVelocitySource(const std::string& object_name, const BoundClotParams& clot_params);
 
     /*!
      * \brief Destructor.

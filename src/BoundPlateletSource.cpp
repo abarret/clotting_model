@@ -26,8 +26,8 @@ namespace clot
 {
 /////////////////////////////// PUBLIC ///////////////////////////////////////
 
-BoundPlateletSource::BoundPlateletSource(std::string object_name, BoundClotParams clot_params)
-    : CartGridFunction(std::move(object_name)), d_clot_params(std::move(clot_params))
+BoundPlateletSource::BoundPlateletSource(std::string object_name, const BoundClotParams& clot_params)
+    : CartGridFunction(std::move(object_name)), d_clot_params(clot_params)
 {
     // intentionally blank
     return;
@@ -181,27 +181,35 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
                 convolution(
                     1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx),
                 0.0);
-
         const double R4 = d_clot_params.Kaw * w * phi_a;
         const double f_ab = R2 / d_clot_params.nb + R4 / d_clot_params.nw;
 
         // Bound to unbound activated
         double trace = 0.0;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
-        const double y_brackets = trace / (z + 1.0e-8);
+        const double y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-8));
         double beta = d_beta_fcn(y_brackets);
 
-        auto lambda_fcn = [z, phi_b](const double lambda) -> std::pair<double, double> {
-            double nb = z / (phi_b + 1.0e-8);
+        const double nb_max = d_clot_params.nb_max;
+        auto lambda_fcn = [nb_max, z, phi_b](const double lambda) -> std::pair<double, double> {
+            double nb = z * nb_max / (phi_b + 1.0e-8);
             double fcn = lambda - nb + nb * std::exp(-lambda);
             double fcn_der = 1.0 - nb * std::exp(-lambda);
             return std::make_pair(fcn, fcn_der);
         };
         double lambda = 0.0;
         if (z > 1.0e-8)
-            lambda = boost::math::tools::newton_raphson_iterate(
-                lambda_fcn, 0.0, -std::numeric_limits<double>::max(), std::numeric_limits<double>::max(), 5);
-        const double f_ba = beta * z * d_clot_params.nb_max * lambda / ((std::exp(lambda) - 1.0 + 1.0e-8));
+        {
+            boost::uintmax_t max_iters = std::numeric_limits<boost::uintmax_t>::max();
+            lambda = boost::math::tools::newton_raphson_iterate(lambda_fcn,
+                                                                0.0,
+                                                                -std::numeric_limits<double>::max(),
+                                                                std::numeric_limits<double>::max(),
+                                                                10,
+                                                                max_iters);
+            plog << "It took " << max_iters << " to converge\n";
+        }
+        const double f_ba = beta * z * nb_max * lambda / ((std::exp(lambda) - 1.0 + 1.0e-8));
 
         (*F_data)(idx) = d_sign * (f_ba - f_ab);
     }

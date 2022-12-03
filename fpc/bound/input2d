@@ -4,7 +4,8 @@ MU  = 0.04                              // fluid viscosity
 RHO = 1.0                                 // fluid density
 LX = 40.0
 LY = 4.0
-RATIO = LX / LY
+//RATIO = LX / LY
+RATIO = 5.0
 P_GRAD = 0.015625*2.0
 RE = 100.0
 
@@ -38,7 +39,7 @@ USING_LS_FCN = TRUE
 MIN_REFINE_FACTOR = -4.0
 MAX_REFINE_FACTOR = 2.0
 LEAST_SQUARES_ORDER = "QUADRATIC"
-USE_STRANG_SPLITTING = TRUE
+USE_STRANG_SPLITTING = FALSE
 USE_OUTSIDE_LS_FOR_TAGGING = TRUE
 ADV_INT_METHOD = "MIDPOINT_RULE"
 DIF_INT_METHOD = "TRAPEZOIDAL_RULE"
@@ -106,18 +107,17 @@ T_START = 2500.0
 WALL_SITES_INIT = 1.0
 ACTIVATED_DIFFUSION_COEF = 1.0e-7
 BOUND_DIFFUSION_COEF = 0.0
-C3 = 6.0e3
-C4 = 0.05
-NB_MAX = 50000
-NW_MAX = 50000
-BETA_0 = 0.01
-BETA_1 = 0.01
-R_0 = 1.0
-KAB = 200.0
-KBB = 200.0
-KAW = 200.0
-R0 = 1.0
-S0 = 1.0
+C3 = 6.0e1
+C4 = 0.005
+NB_MAX = 50000.0
+NW_MAX = 50000.0
+BETA_0 = 0.06
+BETA_1 = 6.4e-9
+KAB = 200.0e-1
+KBB = 200.0e-1
+KAW = 200.0e-1
+R0 = 1.0e-1
+S0 = 5.0e4
 PL_A_IN = 1.0
 VOL_PL = 0.003
 
@@ -125,8 +125,8 @@ U = "(tanh((t - thalf)/tau) + tanh(thalf/tau)) / (1.0 + tanh(thalf/tau)) * -p_gr
 
 ClotParams
 {
-  activated_diffusion_coef = ACTIVATED_DIFFUSION_COEF
-  bound_diffusion_coef = BOUND_DIFFUSION_COEF
+  phi_a_diff_coef = ACTIVATED_DIFFUSION_COEF
+  phi_b_diff_coef = BOUND_DIFFUSION_COEF
   wall_sites_init = WALL_SITES_INIT
   kab = KAB
   kbb = KBB
@@ -135,9 +135,15 @@ ClotParams
   nw_max = NW_MAX
   r0 = R0
   s0 = S0
-  c3 = C3
+  drag_coefficient = C3
   vol_pl = VOL_PL
-  c4 = C4
+  stress_growth = C4
+  uf_viscosity = MU
+  ub_viscosity = MU
+  beta_0 = BETA_0
+  beta_1 = BETA_1
+  nb = 1.0
+  nw = 1.0
 }
 
 CouplingManager {
@@ -493,8 +499,10 @@ Main {
 
 CartesianGeometry {
    domain_boxes = [ (0,0),(NX - 1,NY - 1) ]
-   x_lo = -LX/4, -LY/2
-   x_up = 3*LX/4, LY/2
+   x_lo = -10.0, -2.0
+   x_up = 10.0, 2.0
+//   x_lo = -LX/4, -LY/2
+//   x_up = 3*LX/4, LY/2
    periodic_dimension = 0,0
 }
 

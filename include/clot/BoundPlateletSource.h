@@ -33,7 +33,7 @@ public:
     /*!
      * \brief Class constructor.
      */
-    BoundPlateletSource(std::string object_name, BoundClotParams clot_params);
+    BoundPlateletSource(std::string object_name, const BoundClotParams& clot_params);
     /*!
      * \brief Deleted constructors.
      */

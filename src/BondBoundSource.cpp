@@ -23,8 +23,8 @@
 namespace clot
 {
 /////////////////////////////// PUBLIC ///////////////////////////////////////
-BondBoundSource::BondBoundSource(std::string object_name, BoundClotParams clot_params)
-    : CartGridFunction(std::move(object_name)), d_clot_params(std::move(clot_params))
+BondBoundSource::BondBoundSource(std::string object_name, const BoundClotParams& clot_params)
+    : CartGridFunction(std::move(object_name)), d_clot_params(clot_params)
 {
     // intentionally blank
 } // BondBoundSource
@@ -180,8 +180,10 @@ BondBoundSource::setDataOnPatch(const int data_idx,
         // Compute sources
         double R2 =
             d_clot_params.Kab * phi_a *
-            convolution(
-                1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx) /
+            std::max(
+                convolution(
+                    1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx),
+                0.0) /
             d_clot_params.nb_max;
         double R3 = d_clot_params.Kbb * std::pow(phi_b - 2.0 * z, 2.0) / d_clot_params.nb_max;
         double R4 = d_clot_params.Kaw * w * phi_a / d_clot_params.nb_max;
@@ -191,7 +193,7 @@ BondBoundSource::setDataOnPatch(const int data_idx,
         // Stress decay
         double trace = 0.0;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
-        const double y_brackets = trace / (z + 1.0e-8);
+        const double y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-8));
         double beta = d_beta_fcn(y_brackets);
 
         (*ret_data)(idx) = alpha - beta * z;
