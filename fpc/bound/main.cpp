@@ -396,6 +396,10 @@ main(int argc, char* argv[])
         Pointer<CartGridFunction> p_init = new muParserCartGridFunction(
             "p_init", app_initializer->getComponentDatabase("PressureInitialConditions"), grid_geometry);
         ins_integrator->registerPressureInitialConditions(p_init);
+        Pointer<CartGridFunction> phib_init =
+            new muParserCartGridFunction("phibInit", app_initializer->getComponentDatabase("phibInit"), grid_geometry);
+        Pointer<CartGridFunction> bond_init =
+            new muParserCartGridFunction("bondInit", app_initializer->getComponentDatabase("bondInit"), grid_geometry);
 
         // Configure the IBFE solver
         ib_method_ops->initializeFEEquationSystems();
@@ -564,6 +568,7 @@ main(int argc, char* argv[])
         // Bound platelets
         sb_adv_diff_integrator->registerTransportedQuantity(phi_b_var);
         sb_adv_diff_integrator->restrictToLevelSet(phi_b_var, ls_var);
+        sb_adv_diff_integrator->setInitialConditions(phi_b_var, phib_init);
         Pointer<CellVariable<NDIM, double>> phi_b_src_var = new CellVariable<NDIM, double>("phi_b_src");
         sb_adv_diff_integrator->setAdvectionVelocity(phi_b_var, ub_adv_var);
         sb_adv_diff_integrator->setDiffusionCoefficient(phi_b_var, clot_params.phi_b_diff_coef);
@@ -599,6 +604,7 @@ main(int argc, char* argv[])
 
         // Bonds
         sb_adv_diff_integrator->registerTransportedQuantity(bond_var);
+        sb_adv_diff_integrator->setInitialConditions(bond_var, bond_init);
         sb_adv_diff_integrator->restrictToLevelSet(bond_var, ls_var);
         Pointer<CellVariable<NDIM, double>> bond_src_var = new CellVariable<NDIM, double>("bond_src");
         sb_adv_diff_integrator->setAdvectionVelocity(bond_var, ub_adv_var);
@@ -760,14 +766,19 @@ main(int argc, char* argv[])
         auto var_db = VariableDatabase<NDIM>::getDatabase();
         Pointer<CellVariable<NDIM, double>> drag_var = new CellVariable<NDIM, double>("DragForce", NDIM),
                                             div_sig_var = new CellVariable<NDIM, double>("DivSig", NDIM),
-                                            beta_var = new CellVariable<NDIM, double>("Beta");
+                                            beta_var = new CellVariable<NDIM, double>("Beta"),
+                                            sig_src_var = new CellVariable<NDIM, double>("SigSrcDraw", 3);
         const int drag_idx = var_db->registerVariableAndContext(drag_var, var_db->getContext("Draw"));
         const int div_sig_idx = var_db->registerVariableAndContext(div_sig_var, var_db->getContext("Draw"));
         const int beta_idx = var_db->registerVariableAndContext(beta_var, var_db->getContext("Draw"));
+        const int sig_src_idx = var_db->registerVariableAndContext(sig_src_var, var_db->getContext("Draw"));
 
         visit_data_writer->registerPlotQuantity("DragForce", "VECTOR", drag_idx);
         visit_data_writer->registerPlotQuantity("DivSig", "VECTOR", div_sig_idx);
         visit_data_writer->registerPlotQuantity("Beta", "SCALAR", beta_idx);
+        visit_data_writer->registerPlotQuantity("sig_src_0", "SCALAR", sig_src_idx, 0);
+        visit_data_writer->registerPlotQuantity("sig_src_1", "SCALAR", sig_src_idx, 1);
+        visit_data_writer->registerPlotQuantity("sig_src_2", "SCALAR", sig_src_idx, 2);
 
         // Initialize hierarchy configuration and data on all patches.
         ib_method_ops->initializeFEData();
@@ -825,6 +836,17 @@ main(int argc, char* argv[])
                         div_sig_idx, loop_time, 0, patch_hierarchy->getFinestLevelNumber());
                     adv_diff_integrator->allocatePatchData(
                         beta_idx, loop_time, 0, patch_hierarchy->getFinestLevelNumber());
+                    adv_diff_integrator->allocatePatchData(
+                        sig_src_idx, loop_time, 0, patch_hierarchy->getFinestLevelNumber());
+                    cohesion_relax->setPatchDataIndex(var_db->mapVariableAndContextToIndex(
+                        cohesionStressForcing->getVariable(), adv_diff_integrator->getCurrentContext()));
+                    cohesion_relax->setDataOnPatchHierarchy(sig_src_idx,
+                                                            sig_src_var,
+                                                            patch_hierarchy,
+                                                            loop_time,
+                                                            false,
+                                                            0,
+                                                            patch_hierarchy->getFinestLevelNumber());
                     compute_plot_quantities(drag_idx,
                                             div_sig_idx,
                                             beta_idx,
@@ -842,6 +864,7 @@ main(int argc, char* argv[])
                     adv_diff_integrator->deallocatePatchData(drag_idx, 0, patch_hierarchy->getFinestLevelNumber());
                     adv_diff_integrator->deallocatePatchData(div_sig_idx, 0, patch_hierarchy->getFinestLevelNumber());
                     adv_diff_integrator->deallocatePatchData(beta_idx, 0, patch_hierarchy->getFinestLevelNumber());
+                    adv_diff_integrator->deallocatePatchData(sig_src_idx, 0, patch_hierarchy->getFinestLevelNumber());
                 }
                 if (uses_exodus)
                 {
@@ -1115,7 +1138,9 @@ compute_plot_quantities(const int drag_idx,
 
                 // Compute breaking rate
                 const double tr = (*sig0_data)(idx, 0) + (*sig0_data)(idx, 1);
-                const double avg_y = std::sqrt(tr * 2.0 / (clot_params.S0 * (*bond_data)(idx) + 1.0e-8));
+                double avg_y = 0.0;
+                if (tr > 1.0e-12 && (*bond_data)(idx) > 1.0e-12)
+                    avg_y = std::sqrt(tr * 2.0 / (clot_params.S0 * (*bond_data)(idx) + 1.0e-12));
                 (*beta_data)(idx) = beta_fcn.beta(avg_y);
             }
         }

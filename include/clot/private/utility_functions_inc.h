@@ -55,7 +55,7 @@ convertToStress(const Array& si, const double bond, const double S0, const doubl
 inline void
 convertToStressPtr(double* const si, const double bond, const double S0, const double R0)
 {
-    if (bond < 1.0e-8) return;
+    if (bond < 1.0e-12) return;
     double tr = 0.0;
     for (int d = 0; d < NDIM; ++d) tr += si[d];
     tr = modifiedStressFactor(tr, bond, S0, R0);
@@ -66,7 +66,7 @@ inline IBTK::MatrixNd
 convertToStressMatrix(const IBTK::MatrixNd& si, const double bond, const double S0, const double R0)
 {
     IBTK::MatrixNd ret = si;
-    if (bond < 1.0e-8) return ret;
+    if (bond < 1.0e-12) return ret;
     double tr = modifiedStressFactor(si.trace(), bond, S0, R0);
     ret = si - tr * IBTK::MatrixNd::Ones();
     return ret;
@@ -75,8 +75,8 @@ convertToStressMatrix(const IBTK::MatrixNd& si, const double bond, const double 
 inline double
 modifiedStressFactor(double tr, const double bond, const double S0, const double R0)
 {
-    if (bond < 1.0e-8) return tr;
-    tr = -bond * S0 * R0 * std::sqrt(2.0 * tr / (S0 * bond + 1.0e-8)) / 6.0;
+    if (bond < 1.0e-12) return tr;
+    tr = -bond * S0 * R0 * std::sqrt(2.0 * tr / (S0 * bond + 1.0e-12)) / 6.0;
     return tr;
 }
 } // namespace clot

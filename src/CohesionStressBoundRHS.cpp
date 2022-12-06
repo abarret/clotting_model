@@ -186,8 +186,10 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
         // Compute sources
         double R2 =
             d_clot_params.Kab * phi_a *
-            convolution(
-                1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx);
+            std::max(
+                convolution(
+                    1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx),
+                0.0);
         double R3 = d_clot_params.Kbb * std::pow(phi_b - 2.0 * z, 2.0);
         double R4 = d_clot_params.Kaw * w * phi_a;
 
@@ -196,7 +198,11 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
         // Stress decay
         double trace = 0.0;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
-        const double y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-8));
+        double y_brackets = 0.0;
+        if (trace > 1.0e-12 && z > 1.0e-12)
+            y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
+        else if (trace > 1.0e-12)
+            y_brackets = 1.0; // Artificially make stress relaxation larger.
         double beta = d_beta_fcn(y_brackets);
 #if (NDIM == 2)
         (*ret_data)(idx, 0) = d_clot_params.stress_growth * alpha - beta * (*sig_data)(idx, 0);

@@ -194,7 +194,7 @@ BoundVelocitySource::setDataOnPatch(const int data_idx,
 
         // Get drag force
         double th = d_clot_params.vol_pl * (*phi_data)(idx);
-        double xi = d_clot_params.drag_coef * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-8);
+        double xi = d_clot_params.drag_coef * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-12);
         VectorNd drag_force;
         for (int d = 0; d < NDIM; ++d)
         {

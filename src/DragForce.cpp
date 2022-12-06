@@ -140,7 +140,7 @@ DragForce::setDataOnPatch(const int data_idx,
             // Get the drag coefficient
             double phi = 0.5 * ((*phi_data)(idx.toCell(1)) + (*phi_data)(idx.toCell(0)));
             double th = d_clot_params.vol_pl * phi;
-            double xi = d_clot_params.drag_coef * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-8);
+            double xi = d_clot_params.drag_coef * th * th / (std::pow(1.0 - th, 3.0) + 1.0e-12);
 
             // Now compute drag force
             double ub = 0.5 * ((*ub_data)(idx.toCell(1), axis) + (*ub_data)(idx.toCell(0), axis));

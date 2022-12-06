@@ -187,18 +187,19 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
         // Bound to unbound activated
         double trace = 0.0;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
-        const double y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-8));
+        double y_brackets = 0.0;
+        if (trace > 1.0e-12 && z > 1.0e-12) y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
         double beta = d_beta_fcn(y_brackets);
 
         const double nb_max = d_clot_params.nb_max;
         auto lambda_fcn = [nb_max, z, phi_b](const double lambda) -> std::pair<double, double> {
-            double nb = z * nb_max / (phi_b + 1.0e-8);
+            double nb = z * nb_max / (phi_b + 1.0e-12);
             double fcn = lambda - nb + nb * std::exp(-lambda);
             double fcn_der = 1.0 - nb * std::exp(-lambda);
             return std::make_pair(fcn, fcn_der);
         };
         double lambda = 0.0;
-        if (z > 1.0e-8)
+        if (z > 1.0e-12)
         {
             boost::uintmax_t max_iters = std::numeric_limits<boost::uintmax_t>::max();
             lambda = boost::math::tools::newton_raphson_iterate(lambda_fcn,
@@ -207,9 +208,8 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
                                                                 std::numeric_limits<double>::max(),
                                                                 10,
                                                                 max_iters);
-            plog << "It took " << max_iters << " to converge\n";
         }
-        const double f_ba = beta * z * nb_max * lambda / ((std::exp(lambda) - 1.0 + 1.0e-8));
+        const double f_ba = beta * z * nb_max * lambda / ((std::exp(lambda) - 1.0 + 1.0e-12));
 
         (*F_data)(idx) = d_sign * (f_ba - f_ab);
     }
