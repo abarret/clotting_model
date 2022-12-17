@@ -14,7 +14,6 @@ SET(UNBOUND_CXX_SRC
 
 SET(BOUND_CXX_SRC
     src/BondBoundSource.cpp
-    src/BoundExtraStressForcing.cpp
     src/BoundPlateletSource.cpp
     src/BoundaryMeshMapping.cpp
     src/BoundVelocitySource.cpp

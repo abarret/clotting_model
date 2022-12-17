@@ -65,17 +65,10 @@ BoundPlateletSource::setDataOnPatchHierarchy(const int data_idx,
         {
             // Determine values at correct time
             int var_cur_idx = var_db->mapVariableAndContextToIndex(var, integrator->getCurrentContext());
-            int var_new_idx = var_db->mapVariableAndContextToIndex(var, integrator->getNewContext());
-            const bool var_new_is_allocated = integrator->isAllocatedPatchData(var_new_idx);
             auto* hier_data_ops_manager = HierarchyDataOpsManager<NDIM>::getManager();
             Pointer<HierarchyDataOpsReal<NDIM, double>> hier_cc_data_ops =
                 hier_data_ops_manager->getOperationsDouble(var, hierarchy, /*get_unique*/ true);
-            if (integrator->getCurrentCycleNumber() == 0 || !var_new_is_allocated)
-                hier_cc_data_ops->copyData(var_scr_idx, var_cur_idx);
-            else
-                hier_cc_data_ops->linearSum(var_scr_idx, 0.5, var_cur_idx, 0.5, var_new_idx);
-
-            // Do we need to fill ghost cells?
+            hier_cc_data_ops->copyData(var_scr_idx, var_cur_idx);
         }
     }
 
@@ -175,13 +168,17 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
         const double phi_b = (*phi_b_data)(idx);
         const double z = (*bond_data)(idx);
         // Unbound activated to bound
-        const double R2 =
-            d_clot_params.Kab * phi_a *
-            std::max(
-                convolution(
-                    1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx),
-                0.0);
-        const double R4 = d_clot_params.Kaw * w * phi_a;
+        const double R2 = d_clot_params.Kab * d_clot_params.nb_max * phi_a *
+                          std::max(convolution(d_clot_params.nb_max,
+                                               phi_b_data.getPointer(),
+                                               -2.0,
+                                               bond_data.getPointer(),
+                                               psi_fcn.first,
+                                               psi_fcn.second,
+                                               idx,
+                                               dx),
+                                   0.0);
+        const double R4 = d_clot_params.Kaw * d_clot_params.nw_max * w * d_clot_params.nb_max * phi_a;
         const double f_ab = R2 / d_clot_params.nb + R4 / d_clot_params.nw;
 
         // Bound to unbound activated
@@ -191,25 +188,24 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
         if (trace > 1.0e-12 && z > 1.0e-12) y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
         double beta = d_beta_fcn(y_brackets);
 
-        const double nb_max = d_clot_params.nb_max;
-        auto lambda_fcn = [nb_max, z, phi_b](const double lambda) -> std::pair<double, double> {
-            double nb = z * nb_max / (phi_b + 1.0e-12);
-            double fcn = lambda - nb + nb * std::exp(-lambda);
-            double fcn_der = 1.0 - nb * std::exp(-lambda);
-            return std::make_pair(fcn, fcn_der);
-        };
-        double lambda = 0.0;
-        if (z > 1.0e-12)
+        double P = 1.0;
+        double nb_per_pl = 1.0e4 * z / (phi_b + 1.0e-12);
+        if (nb_per_pl > 2.0)
         {
-            boost::uintmax_t max_iters = std::numeric_limits<boost::uintmax_t>::max();
-            lambda = boost::math::tools::newton_raphson_iterate(lambda_fcn,
-                                                                0.0,
-                                                                -std::numeric_limits<double>::max(),
-                                                                std::numeric_limits<double>::max(),
-                                                                10,
-                                                                max_iters);
+            auto lambda_fcn = [nb_per_pl](const double lambda) -> std::pair<double, double> {
+                double den = 1.0 - std::exp(-lambda);
+                double fcn = lambda / den - nb_per_pl;
+                double fcn_der = 1.0 / den - std::exp(-lambda) * lambda / (den * den);
+                return std::make_pair(fcn, fcn_der);
+            };
+            double lambda = 0.0;
+            boost::uintmax_t max_iters = 100;
+            lambda = boost::math::tools::newton_raphson_iterate(
+                lambda_fcn, 1.0, 1.0, std::numeric_limits<double>::max(), 10, max_iters);
+            P = lambda / (std::exp(lambda) - 1.0);
         }
-        const double f_ba = beta * z * nb_max * lambda / ((std::exp(lambda) - 1.0 + 1.0e-12));
+        // Account for unit change.
+        const double f_ba = beta * z * P * 1.0e4;
 
         (*F_data)(idx) = d_sign * (f_ba - f_ab);
     }

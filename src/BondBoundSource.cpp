@@ -70,16 +70,10 @@ BondBoundSource::setDataOnPatchHierarchy(const int data_idx,
         if (!initial_time)
         {
             int var_cur_idx = var_db->mapVariableAndContextToIndex(var, integrator->getCurrentContext());
-            int var_new_idx = var_db->mapVariableAndContextToIndex(var, integrator->getNewContext());
-            const bool var_new_is_allocated = integrator->isAllocatedPatchData(var_scr_idx);
             auto hier_data_ops_manager = HierarchyDataOpsManager<NDIM>::getManager();
             Pointer<HierarchyDataOpsReal<NDIM, double>> hier_cc_data_ops =
                 hier_data_ops_manager->getOperationsDouble(var, hierarchy, /*get_unique*/ true);
-            if (integrator->getCurrentCycleNumber() == 0 || !var_new_is_allocated)
-                hier_cc_data_ops->copyData(var_scr_idx, var_cur_idx);
-            else
-                hier_cc_data_ops->linearSum(var_scr_idx, 0.5, var_cur_idx, 0.5, var_new_idx);
-            // Do we need to compute ghost cells?
+            hier_cc_data_ops->copyData(var_scr_idx, var_cur_idx);
         }
     }
 
@@ -178,15 +172,18 @@ BondBoundSource::setDataOnPatch(const int data_idx,
         const double z = (*bond_data)(idx);
         const double w = (*w_data)(idx);
         // Compute sources
-        double R2 =
-            d_clot_params.Kab * phi_a *
-            std::max(
-                convolution(
-                    1.0, phi_b_data.getPointer(), -2.0, bond_data.getPointer(), psi_fcn.first, psi_fcn.second, idx, dx),
-                0.0) /
-            d_clot_params.nb_max;
-        double R3 = d_clot_params.Kbb * std::pow(phi_b - 2.0 * z, 2.0) / d_clot_params.nb_max;
-        double R4 = d_clot_params.Kaw * w * phi_a / d_clot_params.nb_max;
+        double R2 = d_clot_params.Kab * d_clot_params.nb_max * phi_a *
+                    std::max(convolution(d_clot_params.nb_max,
+                                         phi_b_data.getPointer(),
+                                         -2.0,
+                                         bond_data.getPointer(),
+                                         psi_fcn.first,
+                                         psi_fcn.second,
+                                         idx,
+                                         dx),
+                             0.0);
+        double R3 = d_clot_params.Kbb * std::pow(d_clot_params.nb_max * phi_b - 2.0 * z, 2.0);
+        double R4 = d_clot_params.Kaw * d_clot_params.nw_max * w * d_clot_params.nb_max * phi_a;
 
         const double alpha = R2 + R3 + R4;
 

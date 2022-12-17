@@ -7,10 +7,10 @@
 
 namespace clot
 {
-DragForce::DragForce(const string& object_name, BoundClotParams clot_params)
-    : CartGridFunction(object_name), d_clot_params(std::move(clot_params))
+DragForce::DragForce(const string& object_name, const BoundClotParams& clot_params)
+    : CartGridFunction(object_name), d_clot_params(clot_params)
 {
-    // intentionall blank
+    // intentionally blank
     return;
 }
 
@@ -31,6 +31,7 @@ DragForce::setDataOnPatchHierarchy(const int data_idx,
                                    int finest_ln)
 {
     bool use_new_ctx = IBTK::rel_equal_eps(data_time, d_new_time);
+    use_new_ctx = false;
     coarsest_ln = coarsest_ln == -1 ? 0 : coarsest_ln;
     finest_ln = finest_ln == -1 ? hierarchy->getFinestLevelNumber() : finest_ln;
 
@@ -114,10 +115,7 @@ DragForce::setDataOnPatch(const int data_idx,
         return;
     }
 
-    Pointer<SideData<NDIM, double>> uf_data =
-        patch->getPatchData(d_uf_var,
-                            IBTK::rel_equal_eps(data_time, d_new_time) ? d_ins_integrator->getNewContext() :
-                                                                         d_ins_integrator->getCurrentContext());
+    Pointer<SideData<NDIM, double>> uf_data = patch->getPatchData(d_uf_var, d_ins_integrator->getCurrentContext());
     Pointer<CellData<NDIM, double>> phi_data = patch->getPatchData(d_phi_var, d_phi_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> ub_data = patch->getPatchData(d_ub_var, d_ub_integrator->getScratchContext());
 

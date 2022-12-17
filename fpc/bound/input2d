@@ -60,13 +60,13 @@ CONVECTIVE_FORM    = "ADVECTIVE"          // how to compute the convective terms
 NORMALIZE_PRESSURE = FALSE                 // whether to explicitly force the pressure to have mean zero
 CFL_MAX            = 0.3                  // maximum CFL number
 U_MAX              = RE * MU / (RHO * RADIUS)
-DT_MAX = 0.25 * DX * CFL_MAX / U_MAX
+DT_MAX = 0.5 * 0.25 * DX * CFL_MAX / U_MAX
 DT_MIN = 0.1 * DT_MAX
 END_TIME = 50.0
 VORTICITY_TAGGING  = TRUE                // whether to tag cells for refinement based on vorticity thresholds
-TAG_BUFFER         = 3                    // sized of tag buffer used by grid generation algorithm
+TAG_BUFFER         = 8                    // sized of tag buffer used by grid generation algorithm
 REGRID_CFL_INTERVAL    = 0.75
-ERROR_ON_DT_CHANGE = TRUE
+ERROR_ON_DT_CHANGE = FALSE
 SPLIT_FORCES = FALSE
 USE_PRESSURE_JUMP_CONDITIONS = TRUE
 USE_VELOCITY_JUMP_CONDITIONS = TRUE
@@ -107,21 +107,33 @@ T_START = 2500.0
 WALL_SITES_INIT = 1.0
 ACTIVATED_DIFFUSION_COEF = 1.0e-7
 BOUND_DIFFUSION_COEF = 0.0
-C3 = 6.0e1
-C4 = 0.005
-NB_MAX = 50000.0
-NW_MAX = 50000.0
+C3 = 6.0e5
+C4 = 5.0/3.0*100.0
+NB_MAX = 5.0
+NW_MAX = 5.0
+NB = 5.0e-4
+NW = 5.0e-4
 BETA_0 = 0.06
-BETA_1 = 6.4e-9
-KAB = 200.0e-1
-KBB = 200.0e-1
-KAW = 200.0e-1
-R0 = 1.0e-1
-S0 = 5.0e4
-PL_A_IN = 1.0
-VOL_PL = 0.003
+BETA_1 = 0.64e6
+KAB = 2.65e-4
+KBB = 2.65e-4
+KAW = 2.65e-4
+R0 = 1.0e-5
+S0 = 1.0e13
+PL_A_IN = 3.0
+VOL_PL = 0.001
 
 U = "(tanh((t - thalf)/tau) + tanh(thalf/tau)) / (1.0 + tanh(thalf/tau)) * -p_grad / (2.0 * mu) * (X_1 - 2.0) * (X_1 + 2.0)"
+
+phibInit
+{
+   function = "0.0"
+}
+
+bondInit
+{
+   function = "0.0"
+}
 
 ClotParams
 {
@@ -142,8 +154,8 @@ ClotParams
   ub_viscosity = MU
   beta_0 = BETA_0
   beta_1 = BETA_1
-  nb = 1.0
-  nw = 1.0
+  nb = NB
+  nw = NW
 }
 
 CouplingManager {
@@ -584,5 +596,6 @@ IIMethod {
    wss_calc_width               = WSS_CALC_WIDTH
    compute_fluid_traction       = COMPUTE_FLUID_TRACTION
    min_ghost_cell_width         = 6
+   spread_delta_fcn = "IB_6"
 }
 

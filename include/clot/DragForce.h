@@ -27,7 +27,7 @@ public:
     /*!
      * \brief Constructor.
      */
-    DragForce(const std::string& object_name, BoundClotParams clot_params);
+    DragForce(const std::string& object_name, const BoundClotParams& clot_params);
 
     /*!
      * \brief Destructor.
