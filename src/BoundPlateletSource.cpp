@@ -183,13 +183,14 @@ BoundPlateletSource::setDataOnPatch(const int data_idx,
 
         // Bound to unbound activated
         double trace = 0.0;
+        double nb_per_pl = 0.0;
+        if (z > 1.0e-12 && phi_b > 3.0e-8) nb_per_pl = 1.0e4 * z / phi_b;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
         double y_brackets = 0.0;
-        if (trace > 1.0e-12 && z > 1.0e-12) y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
+        if (nb_per_pl > 1.0) y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
         double beta = d_beta_fcn(y_brackets);
 
         double P = 1.0;
-        double nb_per_pl = 1.0e4 * z / (phi_b + 1.0e-12);
         if (nb_per_pl > 2.0)
         {
             auto lambda_fcn = [nb_per_pl](const double lambda) -> std::pair<double, double> {

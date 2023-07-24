@@ -75,7 +75,7 @@ convertToStressMatrix(const IBTK::MatrixNd& si, const double bond, const double 
 inline double
 modifiedStressFactor(double tr, const double bond, const double S0, const double R0)
 {
-    if (bond < 1.0e-12) return tr;
+    if (bond < 1.0e-12) return 0.0;
     tr = -bond * S0 * R0 * std::sqrt(2.0 * tr / (S0 * bond + 1.0e-12)) / 6.0;
     return tr;
 }

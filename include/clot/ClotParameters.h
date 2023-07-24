@@ -40,6 +40,9 @@ public:
 
     // Average bonds per platelet
     double nb = std::numeric_limits<double>::quiet_NaN(), nw = std::numeric_limits<double>::quiet_NaN();
+
+    // Pressure factor
+    double pi_fac = std::numeric_limits<double>::quiet_NaN();
 };
 
 } // namespace clot

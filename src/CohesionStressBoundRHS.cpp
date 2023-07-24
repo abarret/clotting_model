@@ -196,10 +196,14 @@ CohesionStressBoundRHS::setDataOnPatch(const int data_idx,
 
         // Stress decay
         double trace = 0.0;
+        double bonds_per_pl = 0.0;
+        if (z > 1.0e-12 && phi_b > 1.0e-8) bonds_per_pl = z / (phi_b + 1.0e-12) * 1.0e4;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
         double y_brackets = 0.0;
-        if (trace > 1.0e-12 && z > 1.0e-12)
+        if (bonds_per_pl > 1.0)
+        {
             y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
+        }
         double beta = d_beta_fcn(y_brackets);
 
 #if (NDIM == 2)

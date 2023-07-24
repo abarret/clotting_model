@@ -22,5 +22,6 @@ BoundClotParams::BoundClotParams(SAMRAI::tbox::Pointer<SAMRAI::tbox::Database> d
     nb_max = db->getDouble("nb_max");
     nb = db->getDouble("nb");
     nw = db->getDouble("nw");
+    pi_fac = db->getDouble("pi_fac");
 }
 } // namespace clot

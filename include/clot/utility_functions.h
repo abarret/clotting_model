@@ -77,6 +77,11 @@ convertToStress(const SAMRAI::pdat::CellData<NDIM, double>& sig_data,
                 double S0,
                 double R0,
                 bool fill_ghosts = false);
+
+SAMRAI::tbox::Pointer<SAMRAI::pdat::CellData<NDIM, double>>
+convertToStressTraceless(const SAMRAI::pdat::CellData<NDIM, double>& sig_data,
+                         SAMRAI::tbox::Pointer<SAMRAI::hier::Patch<NDIM>> patch,
+                         bool fill_ghosts = false);
 //\}
 
 template <typename T>
@@ -147,6 +152,13 @@ getKernelAndWidth(Kernel val)
     TBOX_ERROR("Unknown Kernel\n");
     // We've thrown an error, so just return whatever.
     return std::make_pair(bspline2, -1);
+}
+
+inline double
+pi_fcn(const double thb, const double pi_fac)
+{
+    double det = 1.0 - thb;
+    return pi_fac * thb * thb / std::pow(det, 3.0);
 }
 } // namespace clot
 

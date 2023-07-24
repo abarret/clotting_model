@@ -8,9 +8,13 @@
 namespace clot
 {
 BoundVelocitySource::BoundVelocitySource(const string& object_name, const BoundClotParams& clot_params)
-    : CartGridFunction(object_name), d_clot_params(clot_params)
+    : CartGridFunction(object_name),
+      d_clot_params(clot_params),
+      d_pi_var(new CellVariable<NDIM, double>(d_object_name + "::Pi"))
 {
-    // intentionally blank
+    auto var_db = VariableDatabase<NDIM>::getDatabase();
+    d_pi_idx =
+        var_db->registerVariableAndContext(d_pi_var, var_db->getContext(d_object_name + "::CTX"), IntVector<NDIM>(1));
     return;
 }
 
@@ -36,13 +40,13 @@ BoundVelocitySource::setDataOnPatchHierarchy(const int data_idx,
     bool use_new_ctx = IBTK::rel_equal_eps(data_time, d_new_time);
     coarsest_ln = coarsest_ln == -1 ? 0 : coarsest_ln;
     finest_ln = finest_ln == -1 ? hierarchy->getFinestLevelNumber() : finest_ln;
+    HierarchyCellDataOpsReal<NDIM, double> hier_cc_data_ops(hierarchy, coarsest_ln, finest_ln);
+    auto var_db = VariableDatabase<NDIM>::getDatabase();
 
     // Need to fill in scratch indices with ghost data
     using ITC = HierarchyGhostCellInterpolation::InterpolationTransactionComponent;
-    std::vector<ITC> ghost_comps(4);
+    std::vector<ITC> ghost_comps(5);
 
-    HierarchyCellDataOpsReal<NDIM, double> hier_cc_data_ops(hierarchy, coarsest_ln, finest_ln);
-    auto var_db = VariableDatabase<NDIM>::getDatabase();
     const int phi_scr_idx = var_db->mapVariableAndContextToIndex(d_phi_var, d_phi_integrator->getScratchContext());
     int phi_idx = var_db->mapVariableAndContextToIndex(
         d_phi_var, use_new_ctx ? d_phi_integrator->getNewContext() : d_phi_integrator->getCurrentContext());
@@ -131,6 +135,15 @@ BoundVelocitySource::setDataOnPatchHierarchy(const int data_idx,
                          false,
                          d_ub_integrator->getPhysicalBcCoefs(d_ub_var));
 
+    // Compute additional chemical potential that acts like a pressure.
+    for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
+    {
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        if (!level->checkAllocated(d_pi_idx)) level->allocatePatchData(d_pi_idx, data_time);
+        computePressureOnLevel(d_pi_idx, phi_idx, level);
+    }
+    ghost_comps[4] = ITC(d_pi_idx, "CONSERVATIVE_LINEAR_REFINE", false, "NONE", "LINEAR", false, nullptr);
+
     HierarchyGhostCellInterpolation hier_ghost_fill;
     hier_ghost_fill.initializeOperatorState(ghost_comps, hierarchy, coarsest_ln, finest_ln);
     hier_ghost_fill.fillData(data_time);
@@ -138,7 +151,10 @@ BoundVelocitySource::setDataOnPatchHierarchy(const int data_idx,
     // Now that ghost cells are filled, fill data
     for (int ln = coarsest_ln; ln <= finest_ln; ++ln)
     {
-        setDataOnPatchLevel(data_idx, var, hierarchy->getPatchLevel(ln), data_time, initial_time);
+        Pointer<PatchLevel<NDIM>> level = hierarchy->getPatchLevel(ln);
+        setDataOnPatchLevel(data_idx, var, level, data_time, initial_time);
+        // Deallocate data
+        if (level->checkAllocated(d_pi_idx)) level->deallocatePatchData(d_pi_idx);
     }
 
     // Deallocate patch data if needed
@@ -163,14 +179,12 @@ BoundVelocitySource::setDataOnPatch(const int data_idx,
         return;
     }
 
-    Pointer<SideData<NDIM, double>> uf_data =
-        patch->getPatchData(d_uf_var,
-                            IBTK::rel_equal_eps(data_time, d_new_time) ? d_ins_integrator->getNewContext() :
-                                                                         d_ins_integrator->getCurrentContext());
+    Pointer<SideData<NDIM, double>> uf_data = patch->getPatchData(d_uf_var, d_ins_integrator->getCurrentContext());
     Pointer<CellData<NDIM, double>> ub_data = patch->getPatchData(d_ub_var, d_ub_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> phi_data = patch->getPatchData(d_phi_var, d_phi_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> sig0_data = patch->getPatchData(d_sig_var, d_sig_integrator->getScratchContext());
     Pointer<CellData<NDIM, double>> bond_data = patch->getPatchData(d_bond_var, d_bond_integrator->getScratchContext());
+    Pointer<CellData<NDIM, double>> pi_data = patch->getPatchData(d_pi_idx);
 
 #if !defined(NDEBUG)
     TBOX_ASSERT(ub_src_data);
@@ -212,11 +226,39 @@ BoundVelocitySource::setDataOnPatch(const int data_idx,
         div_sig[1] = ((*sig_data)(idx + x, 2) - (*sig_data)(idx - x, 2)) / dx[0] +
                      ((*sig_data)(idx + y, 1) - (*sig_data)(idx - y, 1)) / dx[1];
 
+        // Pressure
+        VectorNd grad_pi;
+        for (int d = 0; d < NDIM; ++d)
+        {
+            IntVector<NDIM> p1 = 0;
+            p1(d) = 1;
+            grad_pi[d] = ((*pi_data)(idx + p1) - (*pi_data)(idx - p1)) / (2.0 * dx[d]);
+        }
+
         // Total source value
-        for (int d = 0; d < NDIM; ++d) (*ub_src_data)(idx, d) = drag_force[d] + div_sig[d];
+        for (int d = 0; d < NDIM; ++d) (*ub_src_data)(idx, d) = drag_force[d] + div_sig[d] - grad_pi[d];
     }
     return;
 } // setDataOnPatch
+
+void
+BoundVelocitySource::computePressureOnLevel(const int pi_idx, const int phib_idx, Pointer<PatchLevel<NDIM>> level)
+{
+    for (PatchLevel<NDIM>::Iterator p(level); p; p++)
+    {
+        Pointer<Patch<NDIM>> patch = level->getPatch(p());
+        Pointer<CellData<NDIM, double>> pi_data = patch->getPatchData(pi_idx);
+        Pointer<CellData<NDIM, double>> phib_data = patch->getPatchData(phib_idx);
+
+        for (CellIterator<NDIM> ci(patch->getBox()); ci; ci++)
+        {
+            const CellIndex<NDIM>& idx = ci();
+            const double pi_fac = d_clot_params.pi_fac;
+            double th_b = d_clot_params.vol_pl * (*phib_data)(idx);
+            (*pi_data)(idx) = pi_fcn(th_b, pi_fac);
+        }
+    }
+}
 
 //////////////////////////////////////////////////////////////////////////////
 } // namespace clot

@@ -129,6 +129,10 @@ private:
     BoundVelocitySource(const BoundVelocitySource& from) = delete;
     BoundVelocitySource& operator=(const BoundVelocitySource& that) = delete;
 
+    void computePressureOnLevel(const int pi_idx,
+                                const int phib_idx,
+                                SAMRAI::tbox::Pointer<SAMRAI::hier::PatchLevel<NDIM>> level);
+
     SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_sig_var, d_phi_var, d_bond_var, d_ub_var;
     SAMRAI::tbox::Pointer<SAMRAI::pdat::SideVariable<NDIM, double>> d_uf_var;
 
@@ -140,6 +144,10 @@ private:
 
     double d_current_time = std::numeric_limits<double>::quiet_NaN(),
            d_new_time = std::numeric_limits<double>::quiet_NaN();
+
+    // Pi -- Pressure like term
+    SAMRAI::tbox::Pointer<SAMRAI::pdat::CellVariable<NDIM, double>> d_pi_var;
+    int d_pi_idx = IBTK::invalid_index;
 };
 
 } // namespace clot

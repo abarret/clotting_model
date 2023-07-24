@@ -92,4 +92,19 @@ convertToStress(const CellData<NDIM, double>& sig_data,
     return ret_data;
 }
 
+Pointer<CellData<NDIM, double>>
+convertToStressTraceless(const CellData<NDIM, double>& sig_data, Pointer<Patch<NDIM>> patch, const bool fill_ghosts)
+{
+    IntVector<NDIM> gcw = fill_ghosts ? sig_data.getGhostCellWidth().max() : 0;
+    Pointer<CellData<NDIM, double>> ret_data = new CellData<NDIM, double>(patch->getBox(), sig_data.getDepth(), gcw);
+    for (CellIterator<NDIM> ci(ret_data->getGhostBox()); ci; ci++)
+    {
+        const CellIndex<NDIM>& idx = ci();
+        double tr = 0.0;
+        for (int d = 0; d < NDIM; ++d) tr += sig_data(idx, d);
+        for (int d = 0; d < NDIM; ++d) (*ret_data)(idx, d) = sig_data(idx, d) - tr / 2.0;
+        for (int d = NDIM; d < num_stress_comps; ++d) (*ret_data)(idx, d) = sig_data(idx, d);
+    }
+    return ret_data;
+}
 } // namespace clot

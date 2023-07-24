@@ -188,10 +188,12 @@ BondBoundSource::setDataOnPatch(const int data_idx,
         const double alpha = R2 + R3 + R4;
 
         // Stress decay
+        double num_bds_per_pl = 0.0;
+        if (z > 1.0e-12 && phi_b > 1.0e-8) num_bds_per_pl = z / (phi_b + 1.0e-12) * 1.0e4;
         double trace = 0.0;
         for (int d = 0; d < NDIM; ++d) trace += (*sig_data)(idx, d);
         double y_brackets = 0.0;
-        if (trace > 1.0e-12 && z > 1.0e-12) y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
+        if (num_bds_per_pl > 1.0) y_brackets = std::sqrt(2.0 * trace / (z * d_clot_params.S0 + 1.0e-12));
         double beta = d_beta_fcn(y_brackets);
 
         (*ret_data)(idx) = alpha - beta * z;
